@@ -3,6 +3,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+from ai.evaluator import MoveEvaluator
+
 
 class MatchAnalyzer:
     """
@@ -29,6 +31,14 @@ class MatchAnalyzer:
         summary = self._empty_summary()
         chosen_components: dict[str, dict[str, float | int]] = {}
         candidate_components: dict[str, dict[str, float | int]] = {}
+        valid_chosen_components: dict[str, dict[str, float | int]] = {}
+        valid_candidate_components: dict[str, dict[str, float | int]] = {}
+        outcome_chosen_components = {
+            outcome: {} for outcome in ("wins", "losses", "draws", "unknown")
+        }
+        outcome_candidate_components = {
+            outcome: {} for outcome in ("wins", "losses", "draws", "unknown")
+        }
 
         if not self.games_directory.exists():
             return summary
@@ -46,9 +56,21 @@ class MatchAnalyzer:
                 summary,
                 chosen_components,
                 candidate_components,
+                valid_chosen_components,
+                valid_candidate_components,
+                outcome_chosen_components,
+                outcome_candidate_components,
             )
 
-        self._finalize(summary, chosen_components, candidate_components)
+        self._finalize(
+            summary,
+            chosen_components,
+            candidate_components,
+            valid_chosen_components,
+            valid_candidate_components,
+            outcome_chosen_components,
+            outcome_candidate_components,
+        )
         return summary
 
     @staticmethod
@@ -105,6 +127,26 @@ class MatchAnalyzer:
             "evaluation_components": {
                 "chosen_moves": {},
                 "all_candidates": {},
+                "valid_chosen_moves": {},
+                "valid_candidates": {},
+                "selection_context": {
+                    "valid_candidates_identified": 0,
+                    "invalid_candidates_excluded": 0,
+                    "ambiguous_candidates_excluded": 0,
+                    "turns_with_multiple_valid_candidates": 0,
+                    "matches_with_multiple_valid_candidates": 0,
+                },
+            },
+            "evaluation_components_by_outcome": {
+                outcome: {
+                    "chosen_moves": {},
+                    "all_candidates": {},
+                }
+                for outcome in ("wins", "losses", "draws", "unknown")
+            },
+            "mode_performance": {
+                mode: self._empty_mode_performance()
+                for mode in (*self.MODES, "unknown")
             },
             "recent_moves_before_losses": [],
         }
@@ -144,6 +186,16 @@ class MatchAnalyzer:
         summary: dict[str, Any],
         chosen_components: dict[str, dict[str, float | int]],
         candidate_components: dict[str, dict[str, float | int]],
+        valid_chosen_components: dict[str, dict[str, float | int]],
+        valid_candidate_components: dict[str, dict[str, float | int]],
+        outcome_chosen_components: dict[
+            str,
+            dict[str, dict[str, float | int]],
+        ],
+        outcome_candidate_components: dict[
+            str,
+            dict[str, dict[str, float | int]],
+        ],
     ) -> None:
         turns_value = match.get("turns", [])
         turns = turns_value if isinstance(turns_value, list) else []
@@ -163,15 +215,60 @@ class MatchAnalyzer:
 
         summary["outcomes"][outcome] += 1
         self._collect_scores(match, side, summary)
-        self._collect_turns(
+        (
+            chosen_metric_names,
+            candidate_metric_names,
+            valid_chosen_metric_names,
+            valid_candidate_metric_names,
+            has_comparable_selection,
+        ) = self._collect_turns(
             match,
             valid_turns,
             outcome,
             summary,
             chosen_components,
             candidate_components,
+            valid_chosen_components,
+            valid_candidate_components,
+            outcome_chosen_components[outcome],
+            outcome_candidate_components[outcome],
         )
-        self._collect_termination(match, valid_turns, side, outcome, summary)
+        for destination in (
+            chosen_components,
+            outcome_chosen_components[outcome],
+        ):
+            self._mark_component_matches(destination, chosen_metric_names)
+        for destination in (
+            candidate_components,
+            outcome_candidate_components[outcome],
+        ):
+            self._mark_component_matches(destination, candidate_metric_names)
+        self._mark_component_matches(
+            valid_chosen_components,
+            valid_chosen_metric_names,
+        )
+        self._mark_component_matches(
+            valid_candidate_components,
+            valid_candidate_metric_names,
+        )
+        if has_comparable_selection:
+            summary["evaluation_components"]["selection_context"][
+                "matches_with_multiple_valid_candidates"
+            ] += 1
+        cause = self._collect_termination(
+            match,
+            valid_turns,
+            side,
+            outcome,
+            summary,
+        )
+        dominant_mode = self._dominant_mode(valid_turns)
+        self._collect_mode_performance(
+            summary,
+            dominant_mode,
+            outcome,
+            cause,
+        )
 
     def _resolve_bot_side(
         self,
@@ -277,7 +374,17 @@ class MatchAnalyzer:
         summary: dict[str, Any],
         chosen_components: dict[str, dict[str, float | int]],
         candidate_components: dict[str, dict[str, float | int]],
-    ) -> None:
+        valid_chosen_components: dict[str, dict[str, float | int]],
+        valid_candidate_components: dict[str, dict[str, float | int]],
+        outcome_chosen_components: dict[str, dict[str, float | int]],
+        outcome_candidate_components: dict[str, dict[str, float | int]],
+    ) -> tuple[set[str], set[str], set[str], set[str], bool]:
+        chosen_metric_names: set[str] = set()
+        candidate_metric_names: set[str] = set()
+        valid_chosen_metric_names: set[str] = set()
+        valid_candidate_metric_names: set[str] = set()
+        has_comparable_selection = False
+
         if not turns:
             summary["turns"]["matches_without_turns"] += 1
         summary["turns"]["total"] += len(turns)
@@ -300,12 +407,75 @@ class MatchAnalyzer:
 
             if isinstance(chosen_analysis, dict):
                 self._accumulate_components(chosen_components, chosen_analysis)
+                self._accumulate_components(
+                    outcome_chosen_components,
+                    chosen_analysis,
+                )
+                chosen_metric_names.update(
+                    self._numeric_component_names(chosen_analysis)
+                )
             elif self._looks_like_component_map(analysis):
                 self._accumulate_components(chosen_components, analysis)
+                self._accumulate_components(outcome_chosen_components, analysis)
+                chosen_metric_names.update(
+                    self._numeric_component_names(analysis)
+                )
 
             for candidate in analysis.values():
                 if isinstance(candidate, dict):
                     self._accumulate_components(candidate_components, candidate)
+                    self._accumulate_components(
+                        outcome_candidate_components,
+                        candidate,
+                    )
+                    candidate_metric_names.update(
+                        self._numeric_component_names(candidate)
+                    )
+
+            # Las estadísticas de selección son deliberadamente separadas de
+            # los agregados históricos: solo representan turnos donde existían
+            # al menos dos alternativas inequívocamente válidas.
+            classified_candidates = [
+                (candidate, self._candidate_validity(candidate))
+                for candidate in analysis.values()
+                if isinstance(candidate, dict)
+            ]
+            valid_candidates = [
+                candidate
+                for candidate, validity in classified_candidates
+                if validity is True
+            ]
+            context = summary["evaluation_components"]["selection_context"]
+            context["valid_candidates_identified"] += len(valid_candidates)
+            context["invalid_candidates_excluded"] += sum(
+                validity is False for _, validity in classified_candidates
+            )
+            context["ambiguous_candidates_excluded"] += sum(
+                validity is None for _, validity in classified_candidates
+            )
+
+            if len(valid_candidates) >= 2:
+                has_comparable_selection = True
+                context["turns_with_multiple_valid_candidates"] += 1
+                for candidate in valid_candidates:
+                    self._accumulate_components(
+                        valid_candidate_components,
+                        candidate,
+                    )
+                    valid_candidate_metric_names.update(
+                        self._numeric_component_names(candidate)
+                    )
+                if (
+                    isinstance(chosen_analysis, dict)
+                    and self._candidate_validity(chosen_analysis) is True
+                ):
+                    self._accumulate_components(
+                        valid_chosen_components,
+                        chosen_analysis,
+                    )
+                    valid_chosen_metric_names.update(
+                        self._numeric_component_names(chosen_analysis)
+                    )
 
         if outcome == "losses" and turns and self.recent_loss_moves > 0:
             recent = turns[-self.recent_loss_moves:]
@@ -314,6 +484,26 @@ class MatchAnalyzer:
                 "moves": [self._compact_turn(turn) for turn in recent],
             })
 
+        return (
+            chosen_metric_names,
+            candidate_metric_names,
+            valid_chosen_metric_names,
+            valid_candidate_metric_names,
+            has_comparable_selection,
+        )
+
+    @staticmethod
+    def _candidate_validity(candidate: dict[str, Any]) -> bool | None:
+        """Devuelve validez solo cuando el registro permite probarla."""
+        explicit = candidate.get("valid")
+        if isinstance(explicit, bool):
+            return explicit
+
+        total = MatchAnalyzer._number(candidate.get("total"))
+        if total is None:
+            return None
+        return total != MoveEvaluator.INVALID_MOVE_SCORE
+
     def _collect_termination(
         self,
         match: dict[str, Any],
@@ -321,11 +511,11 @@ class MatchAnalyzer:
         side: str | None,
         outcome: str,
         summary: dict[str, Any],
-    ) -> None:
+    ) -> str | None:
         if outcome not in ("wins", "losses") or side is None:
             if outcome != "draws":
                 summary["terminations"]["unknown"] += 1
-            return
+            return None
 
         affected = "own" if outcome == "losses" else "opponent"
         affected_side = side if affected == "own" else self._other_side(side)
@@ -342,6 +532,52 @@ class MatchAnalyzer:
             summary["terminations"]["score_decisions"] += 1
         else:
             summary["terminations"]["unknown"] += 1
+
+        return cause
+
+    @staticmethod
+    def _dominant_mode(turns: list[dict[str, Any]]) -> str:
+        counts: dict[str, int] = {}
+        for turn in turns:
+            mode = turn.get("mode", turn.get("strategy_mode"))
+            if not isinstance(mode, str) or not mode or mode == "unknown":
+                continue
+            counts[mode] = counts.get(mode, 0) + 1
+
+        if not counts:
+            return "unknown"
+
+        highest = max(counts.values())
+        dominant = [mode for mode, count in counts.items() if count == highest]
+        return dominant[0] if len(dominant) == 1 else "unknown"
+
+    def _collect_mode_performance(
+        self,
+        summary: dict[str, Any],
+        mode: str,
+        outcome: str,
+        cause: str | None,
+    ) -> None:
+        performance = summary["mode_performance"].setdefault(
+            mode,
+            self._empty_mode_performance(),
+        )
+        performance["matches"] += 1
+        performance[outcome] += 1
+
+        if outcome == "losses" and cause in self.CAUSES:
+            performance["loss_causes"][cause] += 1
+
+    def _empty_mode_performance(self) -> dict[str, Any]:
+        return {
+            "matches": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "unknown": 0,
+            "win_rate": 0.0,
+            "loss_causes": {cause: 0 for cause in self.CAUSES},
+        }
 
     def _termination_cause(
         self,
@@ -505,6 +741,24 @@ class MatchAnalyzer:
             stats["maximum"] = max(stats["maximum"], value)
 
     @staticmethod
+    def _numeric_component_names(components: dict[str, Any]) -> set[str]:
+        return {
+            name
+            for name, value in components.items()
+            if MatchAnalyzer._number(value) is not None
+        }
+
+    @staticmethod
+    def _mark_component_matches(
+        destination: dict[str, dict[str, float | int]],
+        component_names: set[str],
+    ) -> None:
+        for name in component_names:
+            stats = destination.get(name)
+            if stats is not None:
+                stats["matches"] = int(stats.get("matches", 0)) + 1
+
+    @staticmethod
     def _finalize_components(
         components: dict[str, dict[str, float | int]],
     ) -> dict[str, dict[str, float | int]]:
@@ -513,6 +767,7 @@ class MatchAnalyzer:
             count = int(stats["count"])
             finalized[name] = {
                 "count": count,
+                "matches": int(stats.get("matches", 0)),
                 "average": stats["sum"] / count if count else 0.0,
                 "minimum": stats["minimum"],
                 "maximum": stats["maximum"],
@@ -524,6 +779,16 @@ class MatchAnalyzer:
         summary: dict[str, Any],
         chosen_components: dict[str, dict[str, float | int]],
         candidate_components: dict[str, dict[str, float | int]],
+        valid_chosen_components: dict[str, dict[str, float | int]],
+        valid_candidate_components: dict[str, dict[str, float | int]],
+        outcome_chosen_components: dict[
+            str,
+            dict[str, dict[str, float | int]],
+        ],
+        outcome_candidate_components: dict[
+            str,
+            dict[str, dict[str, float | int]],
+        ],
     ) -> None:
         known_outcomes = sum(
             summary["outcomes"][key]
@@ -552,6 +817,30 @@ class MatchAnalyzer:
         summary["evaluation_components"]["all_candidates"] = (
             self._finalize_components(candidate_components)
         )
+        summary["evaluation_components"]["valid_chosen_moves"] = (
+            self._finalize_components(valid_chosen_components)
+        )
+        summary["evaluation_components"]["valid_candidates"] = (
+            self._finalize_components(valid_candidate_components)
+        )
+
+        for outcome in ("wins", "losses", "draws", "unknown"):
+            summary["evaluation_components_by_outcome"][outcome] = {
+                "chosen_moves": self._finalize_components(
+                    outcome_chosen_components[outcome]
+                ),
+                "all_candidates": self._finalize_components(
+                    outcome_candidate_components[outcome]
+                ),
+            }
+
+        for performance in summary["mode_performance"].values():
+            known = sum(
+                performance[key]
+                for key in ("wins", "losses", "draws")
+            )
+            if known:
+                performance["win_rate"] = performance["wins"] / known
 
     @staticmethod
     def _scores_for_side(
