@@ -27,6 +27,7 @@ class TestGameRecorder(unittest.TestCase):
                         "total": 100,
                     }
                 },
+                mode="balanced",
             )
 
             file_path = recorder.finish_game(
@@ -64,6 +65,16 @@ class TestGameRecorder(unittest.TestCase):
             self.assertEqual(
                 saved_data["turns"][0]["chosen_direction"],
                 "right",
+            )
+
+            self.assertEqual(
+                saved_data["turns"][0]["mode"],
+                "balanced",
+            )
+
+            self.assertEqual(
+                saved_data["bot_side"],
+                "A",
             )
 
 

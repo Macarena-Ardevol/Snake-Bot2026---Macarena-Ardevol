@@ -21,6 +21,7 @@ class GameRecorder:
         data: dict,
         direction: str,
         analysis: dict,
+        mode: str | None = None,
     ) -> None:
         """
         Guarda el estado recibido y la decisión tomada.
@@ -41,6 +42,7 @@ class GameRecorder:
             "score_2": data.get("score_2"),
             "board": data.get("board"),
             "chosen_direction": direction,
+            "mode": mode,
             "analysis": analysis,
         }
 
@@ -75,6 +77,16 @@ class GameRecorder:
             f"{len(self.games.get(game_id, []))}"
         )
 
+        turns = self.games.get(game_id, [])
+        bot_side = next(
+            (
+                turn.get("side")
+                for turn in turns
+                if turn.get("side") in ("A", "B")
+            ),
+            None,
+        )
+
         game_data = {
             "game_id": game_id,
             "finished_at": datetime.now().isoformat(),
@@ -84,11 +96,9 @@ class GameRecorder:
             "score_2": data.get("score_2"),
             "winner": data.get("winner"),
             "remaining_moves": data.get("remaining_moves"),
+            "bot_side": bot_side,
             "final_board": data.get("board"),
-            "turns": self.games.get(
-                game_id,
-                [],
-            ),
+            "turns": turns,
         }
 
         file_path = (
