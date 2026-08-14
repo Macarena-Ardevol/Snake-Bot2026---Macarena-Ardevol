@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ai.evaluator import MoveEvaluator
 from learning.match_analyzer import MatchAnalyzer
 
 
@@ -127,6 +128,12 @@ class TestMatchAnalyzer(unittest.TestCase):
         turns = [
             {
                 "side": "A",
+                "chosen_direction": "up",
+                "mode": "aggressive",
+                "remaining_moves": 12,
+            },
+            {
+                "side": "A",
                 "chosen_direction": "right",
                 "mode": "balanced",
                 "remaining_moves": 10,
@@ -155,9 +162,9 @@ class TestMatchAnalyzer(unittest.TestCase):
             recent_loss_moves=2,
         ).analyze()
 
-        self.assertEqual(summary["turns"]["total"], 2)
+        self.assertEqual(summary["turns"]["total"], 3)
         self.assertEqual(summary["strategy_modes"]["balanced"], 1)
-        self.assertEqual(summary["strategy_modes"]["aggressive"], 1)
+        self.assertEqual(summary["strategy_modes"]["aggressive"], 2)
         self.assertEqual(
             summary["evaluation_components"]["chosen_moves"]["space"]["average"],
             14.0,
@@ -168,6 +175,98 @@ class TestMatchAnalyzer(unittest.TestCase):
         )
         tail = summary["recent_moves_before_losses"][0]["moves"]
         self.assertEqual([move["direction"] for move in tail], ["right", "down"])
+
+        loss_components = summary["evaluation_components_by_outcome"]["losses"]
+        self.assertEqual(
+            loss_components["chosen_moves"]["space"]["average"],
+            14.0,
+        )
+        self.assertEqual(loss_components["chosen_moves"]["space"]["matches"], 1)
+        self.assertEqual(loss_components["all_candidates"]["food"]["count"], 2)
+
+        aggressive = summary["mode_performance"]["aggressive"]
+        self.assertEqual(aggressive["matches"], 1)
+        self.assertEqual(aggressive["losses"], 1)
+        self.assertEqual(aggressive["loss_causes"]["score"], 1)
+
+    def test_tied_dominant_modes_are_attributed_to_unknown(self):
+        turns = [
+            {"side": "A", "mode": "balanced"},
+            {"side": "A", "mode": "defensive"},
+        ]
+        self.write_game(
+            "tie.json",
+            self.match("my_bot", 100, 0, turns=turns),
+        )
+
+        performance = self.analyze()["mode_performance"]
+
+        self.assertEqual(performance["balanced"]["matches"], 0)
+        self.assertEqual(performance["defensive"]["matches"], 0)
+        self.assertEqual(performance["unknown"]["matches"], 1)
+
+    def test_invalid_candidates_do_not_distort_valid_selection_averages(self):
+        turns = [{
+            "side": "A",
+            "chosen_direction": "right",
+            "analysis": {
+                "right": {"space": 10, "total": 10},
+                "down": {"space": 5, "total": 5},
+                "up": {
+                    "space": -999,
+                    "total": MoveEvaluator.INVALID_MOVE_SCORE,
+                },
+            },
+        }]
+        self.write_game("game.json", self.match("my_bot", 10, 0, turns=turns))
+
+        components = self.analyze()["evaluation_components"]
+
+        # El agregado anterior se conserva por compatibilidad.
+        self.assertEqual(components["all_candidates"]["space"]["count"], 3)
+        self.assertEqual(components["valid_candidates"]["space"]["count"], 2)
+        self.assertEqual(components["valid_candidates"]["space"]["average"], 7.5)
+        self.assertEqual(components["valid_chosen_moves"]["space"]["average"], 10)
+        self.assertEqual(
+            components["selection_context"]["invalid_candidates_excluded"],
+            1,
+        )
+
+    def test_only_one_valid_candidate_is_not_a_comparable_selection(self):
+        turns = [{
+            "side": "A",
+            "chosen_direction": "right",
+            "analysis": {
+                "right": {"space": 10, "total": 10},
+                "up": {"space": 0, "total": MoveEvaluator.INVALID_MOVE_SCORE},
+            },
+        }]
+        self.write_game("game.json", self.match("my_bot", 10, 0, turns=turns))
+
+        components = self.analyze()["evaluation_components"]
+
+        self.assertEqual(components["valid_candidates"], {})
+        self.assertEqual(components["valid_chosen_moves"], {})
+        self.assertEqual(
+            components["selection_context"]["turns_with_multiple_valid_candidates"],
+            0,
+        )
+
+    def test_candidate_without_validity_evidence_is_ambiguous(self):
+        turns = [{
+            "side": "A",
+            "chosen_direction": "right",
+            "analysis": {
+                "right": {"space": 10, "total": 10},
+                "old_format": {"space": 5},
+            },
+        }]
+        self.write_game("game.json", self.match("my_bot", 10, 0, turns=turns))
+
+        context = self.analyze()["evaluation_components"]["selection_context"]
+
+        self.assertEqual(context["ambiguous_candidates_excluded"], 1)
+        self.assertEqual(context["turns_with_multiple_valid_candidates"], 0)
 
     def test_negative_remaining_moves_alone_is_not_a_timeout(self):
         self.write_game(
