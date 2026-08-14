@@ -18,4 +18,3 @@ logs/
 data/games/*.json
 data/opponents.json
 
-config.py
