@@ -398,6 +398,7 @@ class BotClient:
             data=data,
             direction=direction,
             analysis=strategy.last_analysis,
+            mode=getattr(strategy, "current_mode", None),
         )
 
         self.previous_boards[

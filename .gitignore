@@ -17,4 +17,4 @@ game_*.log
 logs/
 data/games/*.json
 data/opponents.json
-
+data/learning/
