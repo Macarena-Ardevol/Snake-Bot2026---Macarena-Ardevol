@@ -3,6 +3,7 @@ from ai.flood_fill import FloodFill
 from ai.opponent_model import OpponentModel
 from game.board import GameBoard
 from game.simulator import BoardSimulator
+from ai.weight_config import WeightConfig
 
 
 class LookaheadAnalyzer:
@@ -20,7 +21,9 @@ class LookaheadAnalyzer:
     def __init__(
         self,
         opponent_model: OpponentModel | None = None,
+        weight_config: WeightConfig | None = None,
     ) -> None:
+        self.weight_config = weight_config or WeightConfig.from_current_defaults()
         self.simulator = BoardSimulator()
         self.flood_fill = FloodFill()
 
@@ -43,7 +46,7 @@ class LookaheadAnalyzer:
         )
 
         if not ranked_moves:
-            return weights.ENEMY_TRAPPED_BONUS
+            return self.weight_config.ENEMY_TRAPPED_BONUS
 
         responses: list[tuple[str, float]] = []
 
@@ -78,7 +81,7 @@ class LookaheadAnalyzer:
             )
 
         if not responses:
-            return weights.ENEMY_TRAPPED_BONUS
+            return self.weight_config.ENEMY_TRAPPED_BONUS
 
         # Protección ante el peor caso.
         worst_score = min(
@@ -145,15 +148,15 @@ class LookaheadAnalyzer:
 
         score = (
             my_area - enemy_area
-        ) * weights.LOOKAHEAD_SPACE_WEIGHT
+        ) * self.weight_config.LOOKAHEAD_SPACE_WEIGHT
 
         if my_area <= my_length:
-            score += weights.LOOKAHEAD_CRITICAL_PENALTY
+            score += self.weight_config.LOOKAHEAD_CRITICAL_PENALTY
 
         elif my_area <= my_length * 2:
-            score += weights.LOOKAHEAD_LOW_SPACE_PENALTY
+            score += self.weight_config.LOOKAHEAD_LOW_SPACE_PENALTY
 
         if enemy_eats:
-            score += weights.ENEMY_EAT_PENALTY
+            score += self.weight_config.ENEMY_EAT_PENALTY
 
         return score

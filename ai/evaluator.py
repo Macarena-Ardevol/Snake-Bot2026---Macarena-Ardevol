@@ -10,6 +10,7 @@ from ai.bottleneck import BottleneckAnalyzer
 from ai.opponent_pressure import OpponentPressureAnalyzer
 from ai.food_safety import FoodSafetyAnalyzer
 from ai.opponent_model import OpponentModel
+from ai.weight_config import WeightConfig
 
 
 class MoveEvaluator:
@@ -22,7 +23,10 @@ class MoveEvaluator:
     def __init__(
         self, 
         opponent_model: OpponentModel | None = None,
+        weight_config: WeightConfig | None = None,
     ) -> None:
+        self.weight_config = weight_config or WeightConfig.from_current_defaults()
+        self.INVALID_MOVE_SCORE = self.weight_config.INVALID_MOVE_SCORE
         self.flood_fill = FloodFill()
         self.pathfinder = PathFinder()
         self.simulator = BoardSimulator()
@@ -30,6 +34,7 @@ class MoveEvaluator:
         self.food_race = FoodRaceAnalyzer()
         self.lookahead = LookaheadAnalyzer(
             opponent_model=opponent_model,
+            weight_config=self.weight_config,
         )
         self.bottleneck = BottleneckAnalyzer()
         self.opponent_pressure = OpponentPressureAnalyzer()
@@ -82,7 +87,7 @@ class MoveEvaluator:
                 "bottleneck": 0,
                 "opponent_pressure": 0,
                 "food_safety": 0,
-                "total": weights.INVALID_MOVE_SCORE,
+                "total": self.weight_config.INVALID_MOVE_SCORE,
             }
 
         position = simulated.my_head(side)
@@ -101,23 +106,23 @@ class MoveEvaluator:
 
         space_score = (
             reachable_area
-            * weights.SPACE_WEIGHT
+            * self.weight_config.SPACE_WEIGHT
         )
 
         survival_score = 0
 
         if reachable_area <= snake_length:
             survival_score = (
-                weights.CRITICAL_SPACE_PENALTY
+                self.weight_config.CRITICAL_SPACE_PENALTY
             )
 
         elif reachable_area <= snake_length * 2:
             survival_score = (
-                weights.LOW_SPACE_PENALTY
+                self.weight_config.LOW_SPACE_PENALTY
             )
 
         if eating:
-            food_score = weights.EAT_FOOD_BONUS
+            food_score = self.weight_config.EAT_FOOD_BONUS
             food_race_score = 0
         else:
             food_score = self._food_score(
@@ -130,7 +135,7 @@ class MoveEvaluator:
                     simulated,
                     side,
                 )
-                * weights.FOOD_RACE_WEIGHT
+                * self.weight_config.FOOD_RACE_WEIGHT
             )
 
         mobility_score = self._mobility_score(
@@ -154,7 +159,7 @@ class MoveEvaluator:
                 simulated,
                 side,
             )
-            * weights.LOOKAHEAD_WEIGHT
+            * self.weight_config.LOOKAHEAD_WEIGHT
         )
 
         bottleneck_score = self.bottleneck.score(
@@ -167,7 +172,7 @@ class MoveEvaluator:
                 simulated,
                 side,
             )
-            * weights.OPPONENT_PRESSURE_WEIGHT
+            * self.weight_config.OPPONENT_PRESSURE_WEIGHT
         )
 
         total = (
@@ -228,12 +233,12 @@ class MoveEvaluator:
                 shortest_distance = distance
 
         if shortest_distance is None:
-            return weights.UNREACHABLE_FOOD_PENALTY
+            return self.weight_config.UNREACHABLE_FOOD_PENALTY
 
         return (
-            weights.FOOD_BASE_SCORE
+            self.weight_config.FOOD_BASE_SCORE
             - shortest_distance
-            * weights.FOOD_DISTANCE_WEIGHT
+            * self.weight_config.FOOD_DISTANCE_WEIGHT
         )
 
     def _mobility_score(
@@ -249,14 +254,14 @@ class MoveEvaluator:
         )
 
         if free_neighbours == 0:
-            return weights.NO_EXIT_PENALTY
+            return self.weight_config.NO_EXIT_PENALTY
 
         if free_neighbours == 1:
-            return weights.ONE_EXIT_PENALTY
+            return self.weight_config.ONE_EXIT_PENALTY
 
         return (
             free_neighbours
-            * weights.MOBILITY_WEIGHT
+            * self.weight_config.MOBILITY_WEIGHT
         )
 
     def _territory_score(
@@ -271,7 +276,7 @@ class MoveEvaluator:
 
         return (
             balance
-            * weights.TERRITORY_WEIGHT
+            * self.weight_config.TERRITORY_WEIGHT
         )
 
     def _enemy_risk_score(
@@ -289,12 +294,12 @@ class MoveEvaluator:
 
         if distance == 1:
             return (
-                weights.ENEMY_DISTANCE_ONE_PENALTY
+                self.weight_config.ENEMY_DISTANCE_ONE_PENALTY
             )
 
         if distance == 2:
             return (
-                weights.ENEMY_DISTANCE_TWO_PENALTY
+                self.weight_config.ENEMY_DISTANCE_TWO_PENALTY
             )
 
         return 0
