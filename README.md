@@ -39,3 +39,30 @@ registros. Si un token fue expuesto, hay que regenerarlo en **My Bots**.
 python -m unittest discover -s tests -v
 python -m local_game.benchmark
 ```
+
+## Dataset local de self-play
+
+La generación es manual y escribe exclusivamente bajo `data/selfplay/`:
+
+```bash
+python -m learning.selfplay_dataset --matches 8 --seed 42 \
+  --opponents baseline,survival,random_safe,mirror
+```
+
+Las partidas consecutivas se emparejan con la misma semilla: primero el bot
+avanzado juega como A y luego como B. El reporte puede analizarse offline sin
+mezclarlo con las partidas reales:
+
+```python
+from learning.learning_advisor import LearningAdvisor
+from learning.match_analyzer import MatchAnalyzer
+
+summary = MatchAnalyzer("data/selfplay/run_<id>").analyze()
+report = LearningAdvisor().analyze(summary)
+```
+
+Para combinar fuentes hay que solicitarlo explícitamente:
+
+```python
+summary = MatchAnalyzer(["data/games", "data/selfplay/run_<id>"]).analyze()
+```

@@ -1,7 +1,7 @@
 import json
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from ai.evaluator import MoveEvaluator
 
@@ -19,11 +19,18 @@ class MatchAnalyzer:
 
     def __init__(
         self,
-        games_directory: str | Path = "data/games",
+        games_directory: str | Path | Sequence[str | Path] = "data/games",
         player_name: str | None = None,
         recent_loss_moves: int = 5,
     ) -> None:
-        self.games_directory = Path(games_directory)
+        if isinstance(games_directory, (str, Path)):
+            self.games_directories = (Path(games_directory),)
+        else:
+            self.games_directories = tuple(Path(path) for path in games_directory)
+        # Alias histórico para consumidores que inspeccionan una única ruta.
+        self.games_directory = (
+            self.games_directories[0] if self.games_directories else Path("data/games")
+        )
         self.player_name = player_name
         self.recent_loss_moves = max(0, recent_loss_moves)
 
@@ -40,27 +47,27 @@ class MatchAnalyzer:
             outcome: {} for outcome in ("wins", "losses", "draws", "unknown")
         }
 
-        if not self.games_directory.exists():
-            return summary
-
-        for file_path in sorted(self.games_directory.glob("*.json")):
-            summary["files"]["files_seen"] += 1
-            match = self._read_match(file_path, summary)
-
-            if match is None:
+        for directory in self.games_directories:
+            if not directory.exists():
                 continue
+            for file_path in sorted(directory.glob("*.json")):
+                summary["files"]["files_seen"] += 1
+                match = self._read_match(file_path, summary)
 
-            summary["files"]["matches_analyzed"] += 1
-            self._analyze_match(
-                match,
-                summary,
-                chosen_components,
-                candidate_components,
-                valid_chosen_components,
-                valid_candidate_components,
-                outcome_chosen_components,
-                outcome_candidate_components,
-            )
+                if match is None:
+                    continue
+
+                summary["files"]["matches_analyzed"] += 1
+                self._analyze_match(
+                    match,
+                    summary,
+                    chosen_components,
+                    candidate_components,
+                    valid_chosen_components,
+                    valid_candidate_components,
+                    outcome_chosen_components,
+                    outcome_candidate_components,
+                )
 
         self._finalize(
             summary,
@@ -96,6 +103,7 @@ class MatchAnalyzer:
                 "incomplete_matches": 0,
                 "skipped": [],
             },
+            "data_sources": {"real": 0, "selfplay": 0},
             "outcomes": {
                 "wins": 0,
                 "losses": 0,
@@ -197,6 +205,8 @@ class MatchAnalyzer:
             dict[str, dict[str, float | int]],
         ],
     ) -> None:
+        source = "selfplay" if match.get("source") == "selfplay" else "real"
+        summary["data_sources"][source] += 1
         turns_value = match.get("turns", [])
         turns = turns_value if isinstance(turns_value, list) else []
         valid_turns = [turn for turn in turns if isinstance(turn, dict)]
