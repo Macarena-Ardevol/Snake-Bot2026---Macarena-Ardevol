@@ -66,3 +66,18 @@ Para combinar fuentes hay que solicitarlo explícitamente:
 ```python
 summary = MatchAnalyzer(["data/games", "data/selfplay/run_<id>"]).analyze()
 ```
+
+## Optimización experimental de candidatos
+
+El optimizador compara configuraciones aisladas contra los pesos estables. No
+modifica `ai/weights.py` ni instala el candidato mejor posicionado:
+
+```bash
+python3 -m learning.candidate_optimizer \
+  --weights SPACE_WEIGHT,FOOD_DISTANCE_WEIGHT \
+  --variations 5,-5,10,-10 \
+  --limit 4 --matches 4 --seed 42 \
+  --rivals baseline,survival --max-moves 60
+```
+
+El reporte solo se persiste si se pasa `--output data/learning/reporte.json`.

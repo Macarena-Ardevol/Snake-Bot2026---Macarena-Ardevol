@@ -5,6 +5,7 @@ from game.board import GameBoard
 from ai.opponent_memory import OpponentMemory
 from ai.opponent_model import OpponentModel
 from ai.opponent_profile import OpponentProfile
+from ai.weight_config import WeightConfig
 
 
 class SnakeStrategy:
@@ -23,7 +24,9 @@ class SnakeStrategy:
     def __init__(
         self,
         opponent_memory: OpponentMemory | None = None,
+        weight_config: WeightConfig | None = None,
     ) -> None:
+        self.weight_config = weight_config or WeightConfig.from_current_defaults()
         self.opponent_memory = opponent_memory
 
         self.opponent_profile = (
@@ -41,9 +44,10 @@ class SnakeStrategy:
 
         self.evaluator = MoveEvaluator(
             opponent_model=self.opponent_model,
+            weight_config=self.weight_config,
         )
 
-        self.two_ply = TwoPlyAnalyzer()
+        self.two_ply = TwoPlyAnalyzer(weight_config=self.weight_config)
 
         self.last_analysis: dict[
             str,
@@ -129,7 +133,7 @@ class SnakeStrategy:
             )
 
             should_search_deeper = (
-                score_gap <= weights.DEEP_SEARCH_GAP
+                score_gap <= self.weight_config.DEEP_SEARCH_GAP
             )
 
         if should_search_deeper:
@@ -140,7 +144,7 @@ class SnakeStrategy:
                         side,
                         direction,
                     )
-                    * weights.TWO_PLY_WEIGHT
+                    * self.weight_config.TWO_PLY_WEIGHT
                 )
 
                 self.last_analysis[
@@ -385,12 +389,12 @@ class SnakeStrategy:
         """
 
         if remaining_moves is not None:
-            if remaining_moves <= weights.CRITICAL_REMAINING_MOVES:
+            if remaining_moves <= self.weight_config.CRITICAL_REMAINING_MOVES:
                 return True
 
         score_difference = my_score - enemy_score
 
-        if score_difference <= weights.CRITICAL_SCORE_DEFICIT:
+        if score_difference <= self.weight_config.CRITICAL_SCORE_DEFICIT:
             return True
 
         if len(candidates) >= 2:
@@ -399,7 +403,7 @@ class SnakeStrategy:
                 - candidates[1][1]
             )
 
-            if gap <= weights.CRITICAL_SEARCH_GAP:
+            if gap <= self.weight_config.CRITICAL_SEARCH_GAP:
                 return True
 
         my_head = board.my_head(side)
@@ -410,7 +414,7 @@ class SnakeStrategy:
             + abs(my_head[1] - enemy_head[1])
         )
 
-        if head_distance <= weights.CRITICAL_HEAD_DISTANCE:
+        if head_distance <= self.weight_config.CRITICAL_HEAD_DISTANCE:
             return True
 
         for food in board.food:
@@ -443,7 +447,7 @@ class SnakeStrategy:
                     side,
                     direction,
                 )
-                * weights.DEEP_TWO_PLY_WEIGHT
+                * self.weight_config.DEEP_TWO_PLY_WEIGHT
             )
 
             self.last_analysis[

@@ -2,6 +2,7 @@ from ai import weights
 from ai.evaluator import MoveEvaluator
 from game.board import GameBoard
 from game.simulator import BoardSimulator
+from ai.weight_config import WeightConfig
 
 
 class TwoPlyAnalyzer:
@@ -16,9 +17,10 @@ class TwoPlyAnalyzer:
     la respuesta que peor resultado nos produce.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, weight_config: WeightConfig | None = None) -> None:
+        self.weight_config = weight_config or WeightConfig.from_current_defaults()
         self.simulator = BoardSimulator()
-        self.evaluator = MoveEvaluator()
+        self.evaluator = MoveEvaluator(weight_config=self.weight_config)
 
     def score(
         self,
@@ -33,7 +35,7 @@ class TwoPlyAnalyzer:
         )
 
         if after_my_move is None:
-            return weights.INVALID_MOVE_SCORE
+            return self.weight_config.INVALID_MOVE_SCORE
 
         enemy = "B" if side == "A" else "A"
         enemy_results: list[float] = []
@@ -57,7 +59,7 @@ class TwoPlyAnalyzer:
 
         # El rival no tiene movimientos posibles.
         if not enemy_results:
-            return weights.TWO_PLY_ENEMY_TRAPPED_BONUS
+            return self.weight_config.TWO_PLY_ENEMY_TRAPPED_BONUS
 
         # El rival elige la respuesta que más nos perjudica.
         return min(enemy_results)
@@ -81,7 +83,7 @@ class TwoPlyAnalyzer:
                 score,
             )
 
-        if best_score == weights.INVALID_MOVE_SCORE:
-            return weights.TWO_PLY_FORCED_CRASH_PENALTY
+        if best_score == self.weight_config.INVALID_MOVE_SCORE:
+            return self.weight_config.TWO_PLY_FORCED_CRASH_PENALTY
 
         return best_score
