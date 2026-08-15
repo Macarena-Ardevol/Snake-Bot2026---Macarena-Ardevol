@@ -18,3 +18,4 @@ logs/
 data/games/*.json
 data/opponents.json
 data/learning/
+data/selfplay/
