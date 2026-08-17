@@ -147,6 +147,33 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(websocket.messages[0]["data"]["direction"], "down")
         self.assertEqual(recorder.last_turn["mode"], "balanced")
 
+    async def test_visualizer_failure_happens_after_send_and_does_not_skip_recording(self):
+        events = []
+        client = BotClient("test-token")
+        client.recorder = FakeRecorder(events)
+        client.strategies = {"visual_failure": SlowStrategy(events)}
+
+        class FailingVisualizer:
+            def publish(self, state):
+                events.append("visualize")
+                raise RuntimeError("browser unavailable")
+
+        class OrderedWebSocket(FakeWebSocket):
+            async def send(inner_self, raw_message):
+                events.append("send")
+                await super().send(raw_message)
+
+        client.visualizer = FailingVisualizer()
+        websocket = OrderedWebSocket()
+        await client.process_turn(
+            websocket,
+            self.turn("visual_failure", "rival"),
+        )
+
+        self.assertEqual(events[:3], ["decide", "send", "visualize"])
+        self.assertIn("record:balanced", events)
+        self.assertEqual(len(websocket.messages), 1)
+
     async def test_many_games_send_correct_identifiers_and_isolated_state(self):
         class FastStrategy(SlowStrategy):
             def choose_move(self, *args, **kwargs) -> str:
