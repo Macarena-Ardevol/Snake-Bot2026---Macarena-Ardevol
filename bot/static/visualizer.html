@@ -3,236 +3,239 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Snake Bot · Partida en vivo</title>
+  <title>Snake Bot · Dashboard en vivo</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #08110d;
-      --surface: #101d17;
-      --line: #294236;
-      --text: #ecf9f0;
-      --muted: #91aa9b;
-      --a: #64f58d;
-      --a-body: #258d49;
-      --b: #68b7ff;
-      --b-body: #286492;
-      --food: #ffca55;
+      --bg: #07100c; --surface: #101d17; --surface-2: #16271e;
+      --line: #294236; --text: #ecf9f0; --muted: #91aa9b;
+      --a: #64f58d; --a-body: #258d49; --b: #68b7ff;
+      --b-body: #286492; --food: #ffca55; --danger: #ff7474;
+      --card-min: 280px;
     }
-
     * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: radial-gradient(circle at 50% -20%, #193d2b 0, var(--bg) 45%);
-      color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-    }
-
-    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 40px; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
-    h1 { margin: 0; font-size: clamp(22px, 3vw, 34px); letter-spacing: -.03em; }
-    .connection { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: #ef6262; box-shadow: 0 0 12px currentColor; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% -20%, #193d2b 0, var(--bg) 45%); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    main { width: min(1920px, calc(100% - 24px)); margin: auto; padding: 18px 0 32px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    h1 { margin: 0; font-size: clamp(20px, 2.4vw, 32px); letter-spacing: -.03em; }
+    .connection { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 10px currentColor; }
     .dot.online { background: var(--a); }
-    .game-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 14px; margin-bottom: 8px; scrollbar-width: thin; }
-    .game-tab { flex: 0 0 auto; display: grid; grid-template-columns: 8px auto; column-gap: 8px; align-items: center; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
-    .game-tab:hover { border-color: var(--muted); }
-    .game-tab.active { border-color: var(--a); box-shadow: inset 0 0 0 1px var(--a); }
-    .game-tab-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--a); }
-    .game-tab-dot.finished { background: var(--muted); }
-    .game-tab-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-    .game-tab-score { grid-column: 2; color: var(--muted); font-size: 12px; text-align: left; }
-
-    .layout { display: grid; grid-template-columns: minmax(300px, 680px) minmax(230px, 1fr); gap: 22px; align-items: start; }
-    .panel { border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 18px; }
-    .board-panel { padding: 16px; }
-    #board { display: grid; aspect-ratio: 1; width: 100%; gap: 2px; padding: 2px; border-radius: 10px; background: #20392d; overflow: hidden; }
-    .cell { display: grid; place-items: center; min-width: 0; border-radius: 2px; background: #0b1711; }
-    .cell.a-head, .cell.b-head { border-radius: 35%; box-shadow: inset 0 0 0 2px rgba(255,255,255,.38), 0 0 10px currentColor; }
-    .cell.a-head { background: var(--a); color: var(--a); }
-    .cell.a-body { background: var(--a-body); }
-    .cell.b-head { background: var(--b); color: var(--b); }
-    .cell.b-body { background: var(--b-body); }
-    .cell.food::after { content: ""; width: 58%; height: 58%; border-radius: 50%; background: var(--food); box-shadow: 0 0 12px rgba(255,202,85,.7); }
-
-    aside { display: grid; gap: 14px; }
-    .score { padding: 18px; }
-    .player { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; padding: 12px 0; }
-    .player + .player { border-top: 1px solid var(--line); }
-    .swatch { width: 10px; height: 32px; border-radius: 6px; }
-    .swatch.a { background: var(--a); } .swatch.b { background: var(--b); }
-    .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-    .side { color: var(--muted); font-size: 12px; margin-top: 3px; }
-    .points { font: 700 24px ui-monospace, SFMono-Regular, monospace; }
-    .details { padding: 18px; display: grid; gap: 14px; }
-    .detail { display: flex; justify-content: space-between; gap: 12px; }
-    .label { color: var(--muted); }
-    .value { text-align: right; font-weight: 650; }
-    #status { color: var(--food); }
-
-    .empty { min-height: 400px; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
-    .winner { margin-top: 14px; padding: 16px 18px; color: var(--food); font-weight: 700; text-align: center; }
-    .hidden { display: none; }
-
-    @media (max-width: 780px) {
-      .layout { grid-template-columns: 1fr; }
-      aside { grid-template-columns: 1fr 1fr; }
-      .winner { grid-column: 1 / -1; }
-    }
-
-    @media (max-width: 520px) {
-      main { width: min(100% - 20px, 1120px); padding-top: 18px; }
-      header { align-items: flex-start; flex-direction: column; }
-      aside { grid-template-columns: 1fr; }
-      .winner { grid-column: auto; }
-      .board-panel { padding: 9px; border-radius: 13px; }
-    }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    button, select { border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); padding: 7px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+    button:hover, button.active { border-color: var(--a); }
+    .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min)), 1fr)); gap: 12px; align-items: start; }
+    .dashboard.density-one { --card-min: min(720px, 100%); max-width: 980px; margin: auto; }
+    .dashboard.density-low { --card-min: 360px; }
+    .dashboard.density-medium { --card-min: 245px; }
+    .dashboard.density-high { --card-min: 180px; gap: 8px; }
+    .dashboard.density-ultra { --card-min: 138px; gap: 5px; }
+    .game-card { min-width: 0; border: 1px solid var(--line); border-radius: 13px; padding: 10px; background: color-mix(in srgb, var(--surface) 96%, transparent); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 220px; }
+    .game-card:hover { border-color: var(--muted); transform: translateY(-1px); }
+    .game-card.finished { opacity: .76; }
+    .game-card.win { border-color: color-mix(in srgb, var(--a) 60%, var(--line)); }
+    .game-card.loss { border-color: color-mix(in srgb, var(--danger) 60%, var(--line)); }
+    .card-head, .card-line { display: flex; justify-content: space-between; gap: 7px; align-items: center; min-width: 0; }
+    .opponent { font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .game-id, .meta { color: var(--muted); font-size: 11px; }
+    .scoreline { font: 750 15px ui-monospace, monospace; margin: 6px 0; }
+    .badge { border-radius: 999px; padding: 2px 6px; font-size: 9px; font-weight: 800; letter-spacing: .04em; background: var(--surface-2); white-space: nowrap; }
+    .badge.normal { color: var(--a); } .badge.busy { color: var(--food); } .badge.critical { color: var(--danger); }
+    .board { display: block; width: 100%; aspect-ratio: 1; margin: 7px 0; border-radius: 7px; background: #0b1711; image-rendering: pixelated; }
+    .last { font-size: 11px; text-transform: uppercase; font-weight: 700; }
+    .result { font-weight: 800; } .result.win { color: var(--a); } .result.loss { color: var(--danger); } .result.draw { color: var(--food); }
+    .empty { min-height: 55vh; display: grid; place-items: center; text-align: center; color: var(--muted); }
+    .hidden { display: none !important; }
+    dialog { width: min(1050px, calc(100% - 24px)); max-height: calc(100vh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--text); }
+    dialog::backdrop { background: rgba(0, 0, 0, .76); backdrop-filter: blur(3px); }
+    .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .detail-layout { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(240px, 1fr); gap: 16px; padding: 16px; overflow: auto; }
+    #detailBoard { width: 100%; aspect-ratio: 1; border-radius: 10px; background: #0b1711; }
+    .detail-list { display: grid; align-content: start; gap: 10px; }
+    .detail-row { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .detail-row span:first-child { color: var(--muted); }
+    @media (max-width: 720px) { main { width: calc(100% - 14px); } header { align-items: flex-start; flex-direction: column; } .detail-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <main>
     <header>
-      <h1>Snake Bot <span style="color:var(--muted);font-weight:500">/ en vivo</span></h1>
+      <h1>Snake Bot <span style="color:var(--muted);font-weight:500">/ dashboard</span></h1>
       <div class="connection"><span id="dot" class="dot"></span><span id="connection">Conectando…</span> · <span id="gameCount">0 partidas</span></div>
     </header>
-
-    <nav id="gameTabs" class="game-tabs hidden" aria-label="Partidas simultáneas"></nav>
-
-    <section class="layout">
-      <div class="panel board-panel">
-        <div id="empty" class="empty">Esperando el comienzo de una partida…</div>
-        <div id="board" class="hidden" role="grid" aria-label="Tablero de Snake"></div>
+    <div class="toolbar">
+      <div id="statusFilters" class="filters" aria-label="Filtrar por estado">
+        <button class="active" data-status="all">Todas</button><button data-status="active">Activas</button><button data-status="finished">Finalizadas</button>
       </div>
-
-      <aside>
-        <div class="panel score">
-          <div class="player"><span class="swatch a"></span><div><div id="player1" class="name">Jugador A</div><div class="side">Serpiente A</div></div><div id="score1" class="points">0</div></div>
-          <div class="player"><span class="swatch b"></span><div><div id="player2" class="name">Jugador B</div><div class="side">Serpiente B</div></div><div id="score2" class="points">0</div></div>
-        </div>
-
-        <div class="panel details">
-          <div class="detail"><span class="label">Estado</span><span id="status" class="value">Esperando</span></div>
-          <div class="detail"><span class="label">Jugada del bot</span><span id="direction" class="value">—</span></div>
-          <div class="detail"><span class="label">Movimientos restantes</span><span id="remaining" class="value">—</span></div>
-          <div class="detail"><span class="label">Tiempo de decisión</span><span id="decision" class="value">—</span></div>
-          <div class="detail"><span class="label">Partida</span><span id="game" class="value">—</span></div>
-        </div>
-
-        <div id="winner" class="panel winner hidden"></div>
-      </aside>
-    </section>
+      <select id="resultFilter" aria-label="Filtrar por resultado"><option value="all">Todos los resultados</option><option value="win">Victorias</option><option value="loss">Derrotas</option><option value="draw">Empates</option></select>
+    </div>
+    <div id="empty" class="empty">Esperando el comienzo de una partida…</div>
+    <section id="dashboard" class="dashboard hidden" aria-label="Partidas simultáneas"></section>
   </main>
 
-  <script>
-    const board = document.getElementById('board');
-    const empty = document.getElementById('empty');
-    const dot = document.getElementById('dot');
-    const connection = document.getElementById('connection');
-    const gameTabs = document.getElementById('gameTabs');
-    const games = new Map();
-    let activeGameId = null;
-    const labels = { up: '↑ Arriba', down: '↓ Abajo', left: '← Izquierda', right: '→ Derecha' };
+  <dialog id="detailDialog">
+    <div class="detail-head"><strong id="detailTitle">Partida</strong><button id="closeDetail" type="button">Cerrar</button></div>
+    <div class="detail-layout">
+      <canvas id="detailBoard" aria-label="Tablero ampliado"></canvas>
+      <div id="detailInfo" class="detail-list"></div>
+    </div>
+  </dialog>
 
-    function setText(id, value, fallback = '—') {
-      document.getElementById(id).textContent = value ?? fallback;
-    }
+  <script>
+    const games = new Map();
+    const dashboard = document.getElementById('dashboard');
+    const empty = document.getElementById('empty');
+    const dialog = document.getElementById('detailDialog');
+    const directionLabels = { up: '↑ ARRIBA', down: '↓ ABAJO', left: '← IZQUIERDA', right: '→ DERECHA' };
+    const colors = { ' ': '#0b1711', A: '#64f58d', a: '#258d49', B: '#68b7ff', b: '#286492', '*': '#ffca55' };
+    let statusFilter = 'all';
+    let resultFilter = 'all';
+    let detailGameId = null;
+    let pendingPayload = null;
+    let renderTimer = null;
+    const RENDER_INTERVAL_MS = 100;
 
     function parseBoard(raw) {
       return (raw || '').split(/\r?\n/).filter(Boolean).map(row => {
-        const first = row.indexOf('|');
-        const last = row.lastIndexOf('|');
+        const first = row.indexOf('|'), last = row.lastIndexOf('|');
         return first >= 0 && last > first ? row.slice(first + 1, last) : row;
       });
     }
 
-    function renderBoard(raw) {
+    function drawBoard(canvas, raw) {
       const rows = parseBoard(raw);
       if (!rows.length) return;
-
-      board.innerHTML = '';
-      board.style.gridTemplateColumns = `repeat(${rows[0].length}, 1fr)`;
-
-      const classes = { A: 'a-head', a: 'a-body', B: 'b-head', b: 'b-body', '*': 'food' };
-      rows.forEach(row => [...row].forEach(symbol => {
-        const cell = document.createElement('div');
-        cell.className = `cell ${classes[symbol] || ''}`;
-        cell.setAttribute('role', 'gridcell');
-        board.appendChild(cell);
+      const size = Math.max(120, Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)));
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const cellW = size / rows[0].length, cellH = size / rows.length;
+      ctx.fillStyle = colors[' ']; ctx.fillRect(0, 0, size, size);
+      rows.forEach((row, r) => [...row].forEach((symbol, c) => {
+        ctx.fillStyle = colors[symbol] || colors[' '];
+        const pad = symbol === ' ' ? 0 : Math.max(1, size * .0018);
+        if (symbol === '*') {
+          ctx.beginPath(); ctx.arc((c + .5) * cellW, (r + .5) * cellH, Math.min(cellW, cellH) * .28, 0, Math.PI * 2); ctx.fill();
+        } else ctx.fillRect(c * cellW + pad, r * cellH + pad, cellW - pad * 2, cellH - pad * 2);
       }));
-
-      empty.classList.add('hidden');
-      board.classList.remove('hidden');
     }
 
-    function render(state) {
-      if (state.board) renderBoard(state.board);
-      setText('player1', state.player_1, 'Jugador A');
-      setText('player2', state.player_2, 'Jugador B');
-      setText('score1', state.score_1 ?? 0);
-      setText('score2', state.score_2 ?? 0);
-      setText('remaining', state.remaining_moves);
-      setText('direction', labels[state.direction] || state.direction);
-      setText('decision', state.decision_ms == null ? null : `${state.decision_ms.toFixed(1)} ms`);
-      setText('game', state.game_id ? state.game_id.slice(0, 8) : null);
-
-      const finished = state.status === 'finished';
-      setText('status', finished ? 'Finalizada' : state.board ? `Turno ${state.side || ''}` : 'Esperando');
-      const winner = document.getElementById('winner');
-      winner.textContent = state.winner ? `Ganador: ${state.winner}` : finished ? 'Partida empatada' : '';
-      winner.classList.toggle('hidden', !finished);
+    function opponent(state) { return state.side === 'A' ? state.player_2 : state.player_1; }
+    function ownScore(state) { return state.side === 'B' ? (state.score_2 ?? 0) : (state.score_1 ?? 0); }
+    function rivalScore(state) { return state.side === 'B' ? (state.score_1 ?? 0) : (state.score_2 ?? 0); }
+    function result(state) {
+      if (state.status !== 'finished') return 'active';
+      if (ownScore(state) > rivalScore(state)) return 'win';
+      if (ownScore(state) < rivalScore(state)) return 'loss';
+      return 'draw';
+    }
+    function resultLabel(value) { return { win: 'VICTORIA', loss: 'DERROTA', draw: 'EMPATE', active: 'EN JUEGO' }[value]; }
+    function shortId(id) { return String(id || '—').slice(0, 10); }
+    function escapeHtml(value) {
+      return String(value ?? '—').replace(/[&<>"']/g, symbol => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[symbol]);
     }
 
-    function renderTabs() {
-      gameTabs.innerHTML = '';
-      const states = [...games.values()];
-      const playing = states.filter(state => state.status !== 'finished').length;
-      document.getElementById('gameCount').textContent = `${playing} activa${playing === 1 ? '' : 's'} / ${states.length} total`;
-      gameTabs.classList.toggle('hidden', states.length === 0);
-
-      states
-        .sort((a, b) => (a.status === 'finished') - (b.status === 'finished'))
-        .forEach(state => {
-          const tab = document.createElement('button');
-          const opponent = state.side === 'A' ? state.player_2 : state.player_1;
-          tab.type = 'button';
-          tab.className = `game-tab ${state.game_id === activeGameId ? 'active' : ''}`;
-          tab.setAttribute('aria-pressed', state.game_id === activeGameId ? 'true' : 'false');
-
-          const statusDot = document.createElement('span');
-          statusDot.className = `game-tab-dot ${state.status === 'finished' ? 'finished' : ''}`;
-          const name = document.createElement('span');
-          name.className = 'game-tab-name';
-          name.textContent = opponent || state.game_id.slice(0, 8);
-          const score = document.createElement('span');
-          score.className = 'game-tab-score';
-          score.textContent = `${state.score_1 ?? 0} – ${state.score_2 ?? 0}`;
-          tab.append(statusDot, name, score);
-          tab.onclick = () => {
-            activeGameId = state.game_id;
-            renderTabs();
-            render(state);
-          };
-          gameTabs.appendChild(tab);
-        });
+    function visibleStates() {
+      return [...games.values()].filter(state => {
+        const stateResult = result(state);
+        if (statusFilter === 'active' && stateResult !== 'active') return false;
+        if (statusFilter === 'finished' && stateResult === 'active') return false;
+        return resultFilter === 'all' || stateResult === resultFilter;
+      }).sort((a, b) => Number(a.status === 'finished') - Number(b.status === 'finished'));
     }
 
-    function updateGames(payload) {
-      (payload.games || []).forEach(state => games.set(state.game_id, state));
-
-      if (!activeGameId || !games.has(activeGameId)) {
-        const active = [...games.values()].find(state => state.status !== 'finished');
-        activeGameId = active?.game_id || games.keys().next().value || null;
-      }
-
-      renderTabs();
-      if (activeGameId) render(games.get(activeGameId));
+    function density(count) {
+      if (count <= 1) return 'density-one';
+      if (count <= 4) return 'density-low';
+      if (count <= 16) return 'density-medium';
+      if (count <= 70) return 'density-high';
+      return 'density-ultra';
     }
+
+    function makeCard(state) {
+      const outcome = result(state);
+      const card = document.createElement('article');
+      card.className = `game-card ${state.status === 'finished' ? 'finished' : ''} ${outcome}`;
+      card.dataset.gameId = state.game_id;
+      card.tabIndex = 0;
+      const level = ['normal', 'busy', 'critical'].includes(state.compute_level) ? state.compute_level : 'normal';
+      card.innerHTML = `
+        <div class="card-head"><span class="opponent">vs ${escapeHtml(opponent(state) || 'Rival')}</span><span class="badge">BOT ${escapeHtml(state.side)}</span></div>
+        <div class="card-line game-id"><span>${escapeHtml(shortId(state.game_id))}</span><span class="result ${outcome}">${resultLabel(outcome)}</span></div>
+        <div class="card-line scoreline"><span>${escapeHtml(ownScore(state))} – ${escapeHtml(rivalScore(state))}</span><span class="badge ${level}">${level.toUpperCase()}</span></div>
+        <div class="card-line meta"><span>Moves ${escapeHtml(state.remaining_moves)}</span><span>${state.decision_ms == null ? '—' : escapeHtml(Number(state.decision_ms).toFixed(1) + ' ms')}</span></div>
+        <canvas class="board" aria-label="Tablero ${escapeHtml(shortId(state.game_id))}"></canvas>
+        <div class="card-line"><span class="last">${escapeHtml(directionLabels[state.direction] || state.direction || 'SIN JUGADA')}</span><span class="meta">${escapeHtml(state.mode || 'balanced')}</span></div>`;
+      const open = () => openDetail(state.game_id);
+      card.onclick = open;
+      card.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') open(); };
+      return card;
+    }
+
+    function renderDashboard() {
+      const states = visibleStates();
+      dashboard.className = `dashboard ${density(states.length)} ${states.length ? '' : 'hidden'}`;
+      empty.classList.toggle('hidden', states.length > 0);
+      empty.textContent = games.size ? 'No hay partidas para este filtro.' : 'Esperando el comienzo de una partida…';
+      const fragment = document.createDocumentFragment();
+      states.forEach(state => fragment.appendChild(makeCard(state)));
+      dashboard.replaceChildren(fragment);
+      dashboard.querySelectorAll('.game-card').forEach(card => drawBoard(card.querySelector('canvas'), games.get(card.dataset.gameId)?.board));
+      const active = [...games.values()].filter(state => state.status !== 'finished').length;
+      document.getElementById('gameCount').textContent = `${active} activa${active === 1 ? '' : 's'} / ${games.size} total`;
+      if (detailGameId && games.has(detailGameId)) renderDetail(games.get(detailGameId));
+    }
+
+    function detailRow(label, value) { return `<div class="detail-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`; }
+    function renderDetail(state) {
+      const outcome = result(state);
+      document.getElementById('detailTitle').textContent = `${shortId(state.game_id)} · vs ${opponent(state) || 'Rival'}`;
+      document.getElementById('detailInfo').innerHTML = [
+        detailRow('Game ID', state.game_id), detailRow('Estado', resultLabel(outcome)),
+        detailRow('Jugador A', `${state.player_1 || '—'} · ${state.score_1 ?? 0}`),
+        detailRow('Jugador B', `${state.player_2 || '—'} · ${state.score_2 ?? 0}`),
+        detailRow('Lado del bot', state.side), detailRow('Rival', opponent(state)),
+        detailRow('Movimientos restantes', state.remaining_moves),
+        detailRow('Última jugada', directionLabels[state.direction] || state.direction),
+        detailRow('Modo estratégico', state.mode), detailRow('Compute level', state.compute_level),
+        detailRow('Tiempo de decisión', state.decision_ms == null ? null : Number(state.decision_ms).toFixed(2) + ' ms'),
+        detailRow('Decisiones pendientes', state.pending_decisions), detailRow('Ganador informado', state.winner)
+      ].join('');
+      requestAnimationFrame(() => drawBoard(document.getElementById('detailBoard'), state.board || state.final_board));
+    }
+    function openDetail(gameId) { detailGameId = gameId; renderDetail(games.get(gameId)); dialog.showModal(); }
+    document.getElementById('closeDetail').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => { detailGameId = null; });
+    dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+
+    function applyPayload(payload) {
+      const incoming = new Set();
+      (payload.games || []).forEach(state => { const id = String(state.game_id); incoming.add(id); games.set(id, state); });
+      [...games.keys()].forEach(id => { if (!incoming.has(id)) games.delete(id); });
+      renderDashboard();
+    }
+    function schedulePayload(payload) {
+      pendingPayload = payload;
+      if (renderTimer !== null) return;
+      renderTimer = setTimeout(() => {
+        const latest = pendingPayload; pendingPayload = null; renderTimer = null;
+        requestAnimationFrame(() => applyPayload(latest));
+      }, RENDER_INTERVAL_MS);
+    }
+
+    document.getElementById('statusFilters').onclick = event => {
+      const button = event.target.closest('button[data-status]'); if (!button) return;
+      statusFilter = button.dataset.status;
+      document.querySelectorAll('[data-status]').forEach(item => item.classList.toggle('active', item === button));
+      renderDashboard();
+    };
+    document.getElementById('resultFilter').onchange = event => { resultFilter = event.target.value; renderDashboard(); };
+    window.addEventListener('resize', () => { if (detailGameId) renderDetail(games.get(detailGameId)); });
 
     const events = new EventSource('/events');
-    events.onopen = () => { dot.classList.add('online'); connection.textContent = 'Conectado'; };
-    events.onerror = () => { dot.classList.remove('online'); connection.textContent = 'Reconectando…'; };
-    events.onmessage = event => updateGames(JSON.parse(event.data));
+    events.onopen = () => { document.getElementById('dot').classList.add('online'); document.getElementById('connection').textContent = 'Conectado'; };
+    events.onerror = () => { document.getElementById('dot').classList.remove('online'); document.getElementById('connection').textContent = 'Reconectando…'; };
+    events.onmessage = event => schedulePayload(JSON.parse(event.data));
   </script>
 </body>
 </html>

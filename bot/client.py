@@ -435,14 +435,18 @@ class BotClient:
     ) -> None:
         game_id = data["game_id"]
         side = data["side"]
-        self.visualizer.publish({
-            **data,
-            "status": "playing",
-            "direction": direction,
-            "decision_ms": decision_time * 1000,
-            "compute_level": compute_level,
-            "pending_decisions": pending_decisions,
-        })
+        try:
+            self.visualizer.publish({
+                **data,
+                "status": "playing",
+                "direction": direction,
+                "decision_ms": decision_time * 1000,
+                "compute_level": compute_level,
+                "pending_decisions": pending_decisions,
+                "mode": getattr(strategy, "current_mode", None),
+            })
+        except Exception as error:
+            print(f"No se pudo actualizar el visualizador: {error}")
 
         if strategy.last_enemy_prediction:
             self.enemy_predictions[
@@ -622,10 +626,13 @@ class BotClient:
         )
 
         print("Partida terminada.")
-        self.visualizer.publish({
-            **data,
-            "status": "finished",
-        })
+        try:
+            self.visualizer.publish({
+                **data,
+                "status": "finished",
+            })
+        except Exception as error:
+            print(f"No se pudo actualizar el visualizador: {error}")
         print(
             f"{player_1}: {score_1}"
         )

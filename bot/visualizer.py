@@ -10,49 +10,72 @@ from typing import Any
 class LiveStateHub:
     """Distribuye el último estado del juego a los navegadores conectados."""
 
-    def __init__(self) -> None:
+    def __init__(self, recent_limit: int = 50) -> None:
         self._lock = threading.Lock()
-        self._subscribers: set[queue.Queue[str]] = set()
+        self._subscribers: set[queue.Queue[None]] = set()
         self._games: dict[str, dict[str, Any]] = {}
-        self._latest = json.dumps({"games": []})
+        self._finished_order: list[str] = []
+        self.recent_limit = max(0, recent_limit)
 
     def publish(self, state: dict[str, Any]) -> None:
         with self._lock:
             game_id = state.get("game_id")
 
             if game_id:
-                self._games[str(game_id)] = state.copy()
-
-            payload = {
-                "games": list(self._games.values()),
-            }
-            raw_state = json.dumps(payload, ensure_ascii=False)
-            self._latest = raw_state
+                key = str(game_id)
+                previous = self._games.get(key, {})
+                merged = {**previous, **state, "game_id": key}
+                self._games[key] = merged
+                self._track_finished(key, merged)
             subscribers = tuple(self._subscribers)
 
         for subscriber in subscribers:
             try:
-                subscriber.put_nowait(raw_state)
+                subscriber.put_nowait(None)
             except queue.Full:
-                try:
-                    subscriber.get_nowait()
-                    subscriber.put_nowait(raw_state)
-                except (queue.Empty, queue.Full):
-                    pass
+                pass
 
-    def subscribe(self) -> queue.Queue[str]:
-        subscriber: queue.Queue[str] = queue.Queue(maxsize=2)
+    def snapshot(self) -> str:
+        with self._lock:
+            payload = {"games": [state.copy() for state in self._games.values()]}
+        return json.dumps(payload, ensure_ascii=False)
+
+    def subscribe(self) -> queue.Queue[None]:
+        subscriber: queue.Queue[None] = queue.Queue(maxsize=1)
 
         with self._lock:
             self._subscribers.add(subscriber)
-            latest = self._latest
 
-        subscriber.put_nowait(latest)
+        subscriber.put_nowait(None)
         return subscriber
 
-    def unsubscribe(self, subscriber: queue.Queue[str]) -> None:
+    def unsubscribe(self, subscriber: queue.Queue[None]) -> None:
         with self._lock:
             self._subscribers.discard(subscriber)
+
+    def notify_subscribers(self) -> None:
+        """Despierta streams SSE sin publicar ni serializar un estado."""
+        with self._lock:
+            subscribers = tuple(self._subscribers)
+
+        for subscriber in subscribers:
+            try:
+                subscriber.put_nowait(None)
+            except queue.Full:
+                pass
+
+    def _track_finished(self, game_id: str, state: dict[str, Any]) -> None:
+        if state.get("status") != "finished":
+            if game_id in self._finished_order:
+                self._finished_order.remove(game_id)
+            return
+
+        if game_id not in self._finished_order:
+            self._finished_order.append(game_id)
+
+        while len(self._finished_order) > self.recent_limit:
+            oldest = self._finished_order.pop(0)
+            self._games.pop(oldest, None)
 
 
 class LiveVisualizer:
@@ -64,6 +87,7 @@ class LiveVisualizer:
         self.hub = LiveStateHub()
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._stopping = threading.Event()
         self._index = (
             Path(__file__).parent
             / "static"
@@ -74,6 +98,7 @@ class LiveVisualizer:
         if self._server is not None:
             return True
 
+        self._stopping.clear()
         handler = self._make_handler()
 
         try:
@@ -99,6 +124,8 @@ class LiveVisualizer:
         if self._server is None:
             return
 
+        self._stopping.set()
+        self.hub.notify_subscribers()
         self._server.shutdown()
         self._server.server_close()
         self._server = None
@@ -110,6 +137,7 @@ class LiveVisualizer:
     def _make_handler(self) -> type[BaseHTTPRequestHandler]:
         hub = self.hub
         index = self._index
+        stopping = self._stopping
 
         class VisualizerHandler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -143,9 +171,12 @@ class LiveVisualizer:
                 subscriber = hub.subscribe()
 
                 try:
-                    while True:
+                    while not stopping.is_set():
                         try:
-                            raw_state = subscriber.get(timeout=15)
+                            subscriber.get(timeout=15)
+                            if stopping.is_set():
+                                break
+                            raw_state = hub.snapshot()
                             message = f"data: {raw_state}\n\n"
                         except queue.Empty:
                             message = ": keep-alive\n\n"
@@ -156,6 +187,9 @@ class LiveVisualizer:
                     pass
                 finally:
                     hub.unsubscribe(subscriber)
+                    # No intentes leer otra petición HTTP después de que el
+                    # stream SSE terminó (por ejemplo, al cerrar el navegador).
+                    self.close_connection = True
 
             def _send_bytes(self, content: bytes, content_type: str) -> None:
                 self.send_response(HTTPStatus.OK)
