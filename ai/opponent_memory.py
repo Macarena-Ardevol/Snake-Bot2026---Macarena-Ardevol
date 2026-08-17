@@ -1,5 +1,15 @@
 import json
+import threading
+from functools import wraps
 from pathlib import Path
+
+
+def synchronized(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
 
 
 class OpponentMemory:
@@ -18,6 +28,7 @@ class OpponentMemory:
             exist_ok=True,
         )
 
+        self._lock = threading.RLock()
         self.data = self._load()
 
     def _load(self) -> dict:
@@ -37,18 +48,15 @@ class OpponentMemory:
         ):
             return {}
 
+    @synchronized
     def save(self) -> None:
-        with self.file_path.open(
-            "w",
-            encoding="utf-8",
-        ) as file:
-            json.dump(
-                self.data,
-                file,
-                indent=4,
-                ensure_ascii=False,
-            )
+        temporary_path = self.file_path.with_suffix(self.file_path.suffix + ".tmp")
+        with self._lock:
+            with temporary_path.open("w", encoding="utf-8") as file:
+                json.dump(self.data, file, indent=4, ensure_ascii=False)
+            temporary_path.replace(self.file_path)
 
+    @synchronized
     def record_move(
         self,
         opponent: str,
@@ -75,6 +83,7 @@ class OpponentMemory:
 
         self.save()
 
+    @synchronized
     def record_game(
         self,
         opponent: str,
@@ -91,12 +100,14 @@ class OpponentMemory:
 
         self.save()
 
+    @synchronized
     def get_stats(
         self,
         opponent: str,
     ) -> dict:
         return self._get_stats(opponent).copy()
 
+    @synchronized
     def direction_probability(
         self,
         opponent: str,
@@ -114,6 +125,7 @@ class OpponentMemory:
             / total_moves
         )
 
+    @synchronized
     def food_aggression(
         self,
         opponent: str,
@@ -124,6 +136,7 @@ class OpponentMemory:
             default=0.5,
         )
 
+    @synchronized
     def head_aggression(
         self,
         opponent: str,
@@ -134,6 +147,7 @@ class OpponentMemory:
             default=0.5,
         )
 
+    @synchronized
     def contest_aggression(
         self,
         opponent: str,
@@ -202,6 +216,7 @@ class OpponentMemory:
 
         return stats
 
+    @synchronized
     def confidence(
         self,
         opponent: str,
@@ -226,6 +241,7 @@ class OpponentMemory:
             1.0,
         )
 
+    @synchronized
     def record_prediction(
         self,
         opponent: str,
@@ -242,6 +258,7 @@ class OpponentMemory:
         self.save()
 
 
+    @synchronized
     def prediction_accuracy(
         self,
         opponent: str,

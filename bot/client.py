@@ -1,5 +1,6 @@
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import websockets
@@ -20,7 +21,13 @@ class BotClient:
     jugar y aprender del comportamiento de los rivales.
     """
 
-    def __init__(self, token: str) -> None:
+    def __init__(
+        self,
+        token: str,
+        decision_workers: int = 2,
+        background_workers: int = 4,
+        max_pending_events: int = 256,
+    ) -> None:
         self.token = token
 
         self.opponent_memory = OpponentMemory()
@@ -31,6 +38,18 @@ class BotClient:
         self.game_locks: dict[str, asyncio.Lock] = {}
         self.event_tasks: set[asyncio.Task] = set()
         self.send_lock = asyncio.Lock()
+        # choose_move es CPU-bound en Python. Un pool pequeño mantiene el
+        # event loop receptivo y evita que decenas de threads compitan por el
+        # GIL, lo que empeora la latencia media en ráfagas grandes.
+        self.decision_executor = ThreadPoolExecutor(
+            max_workers=max(1, decision_workers),
+            thread_name_prefix="snake-decision",
+        )
+        self.background_executor = ThreadPoolExecutor(
+            max_workers=max(1, background_workers),
+            thread_name_prefix="snake-background",
+        )
+        self.event_slots = asyncio.Semaphore(max(1, max_pending_events))
 
         self.recorder = GameRecorder()
         self.opponent_observer = OpponentObserver()
@@ -84,7 +103,7 @@ class BotClient:
 
                 # Los cálculos de distintas partidas se despachan sin bloquear
                 # la recepción de nuevos eventos del websocket.
-                if event.get("event") == "your_turn":
+                if event.get("event") in ("your_turn", "game_over"):
                     task = asyncio.create_task(
                         self._handle_event_safely(websocket, event)
                     )
@@ -104,10 +123,11 @@ class BotClient:
         websocket: Any,
         event: dict,
     ) -> None:
-        try:
-            await self.handle_event(websocket, event)
-        except Exception as error:
-            print(f"Error procesando evento: {error}")
+        async with self.event_slots:
+            try:
+                await self.handle_event(websocket, event)
+            except Exception as error:
+                print(f"Error procesando evento: {error}")
 
     async def handle_event(
         self,
@@ -303,7 +323,8 @@ class BotClient:
         decision_start = time.perf_counter()
 
         try:
-            direction = await asyncio.to_thread(
+            direction = await asyncio.get_running_loop().run_in_executor(
+                self.decision_executor,
                 strategy.choose_move,
                 board,
                 side,
@@ -348,13 +369,6 @@ class BotClient:
             action,
         )
 
-        self.visualizer.publish({
-            **data,
-            "status": "playing",
-            "direction": direction,
-            "decision_ms": decision_time * 1000,
-        })
-
         send_time = (
             time.perf_counter()
             - turn_start
@@ -367,6 +381,37 @@ class BotClient:
             f"| total hasta envío: "
             f"{send_time * 1000:.2f} ms"
         )
+
+        await asyncio.get_running_loop().run_in_executor(
+            self.background_executor,
+            self._post_process_turn,
+            data,
+            board,
+            previous_board,
+            opponent,
+            strategy,
+            direction,
+            decision_time,
+        )
+
+    def _post_process_turn(
+        self,
+        data: dict,
+        board: GameBoard,
+        previous_board: GameBoard | None,
+        opponent: str | None,
+        strategy: SnakeStrategy,
+        direction: str,
+        decision_time: float,
+    ) -> None:
+        game_id = data["game_id"]
+        side = data["side"]
+        self.visualizer.publish({
+            **data,
+            "status": "playing",
+            "direction": direction,
+            "decision_ms": decision_time * 1000,
+        })
 
         if strategy.last_enemy_prediction:
             self.enemy_predictions[
@@ -510,7 +555,12 @@ class BotClient:
         )
 
         async with game_lock:
-            self._finish_game(data)
+            await asyncio.get_running_loop().run_in_executor(
+                self.background_executor,
+                self._finish_game,
+                data,
+            )
+            self._cleanup_game(game_id)
 
     def _finish_game(
         self,
@@ -581,30 +631,12 @@ class BotClient:
                     won=won,
                 )
 
-            self.previous_boards.pop(
-                game_id,
-                None,
-            )
-
-            self.opponents.pop(
-                game_id,
-                None,
-            )
-
-            self.enemy_predictions.pop(
-                game_id,
-                None,
-            )
-
-            self.strategies.pop(
-                game_id,
-                None,
-            )
-
-            self.game_locks.pop(
-                game_id,
-                None,
-            )
+    def _cleanup_game(self, game_id: str) -> None:
+        self.previous_boards.pop(game_id, None)
+        self.opponents.pop(game_id, None)
+        self.enemy_predictions.pop(game_id, None)
+        self.strategies.pop(game_id, None)
+        self.game_locks.pop(game_id, None)
 
     def _get_opponent(
         self,
