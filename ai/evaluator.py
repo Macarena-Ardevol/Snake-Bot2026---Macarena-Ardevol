@@ -57,6 +57,7 @@ class MoveEvaluator:
         board: GameBoard,
         side: str,
         direction: str,
+        compute_level: str = "normal",
     ) -> dict[str, float]:
         head = board.my_head(side)
         next_position = board.next_position(head, direction)
@@ -130,23 +131,27 @@ class MoveEvaluator:
                 position,
             )
 
-            food_race_score = (
-                self.food_race.score(
-                    simulated,
-                    side,
+            food_race_score = 0
+            if compute_level != "critical":
+                food_race_score = (
+                    self.food_race.score(
+                        simulated,
+                        side,
+                    )
+                    * self.weight_config.FOOD_RACE_WEIGHT
                 )
-                * self.weight_config.FOOD_RACE_WEIGHT
-            )
 
         mobility_score = self._mobility_score(
             simulated,
             position,
         )
 
-        territory_score = self._territory_score(
-            simulated,
-            side,
-        )
+        territory_score = 0
+        if compute_level != "critical":
+            territory_score = self._territory_score(
+                simulated,
+                side,
+            )
 
         enemy_risk_score = self._enemy_risk_score(
             simulated,
@@ -154,26 +159,32 @@ class MoveEvaluator:
             position,
         )
 
-        lookahead_score = (
-            self.lookahead.score(
+        lookahead_score = 0
+        if compute_level != "critical":
+            lookahead_score = (
+                self.lookahead.score(
+                    simulated,
+                    side,
+                )
+                * self.weight_config.LOOKAHEAD_WEIGHT
+            )
+
+        bottleneck_score = 0
+        if compute_level != "critical":
+            bottleneck_score = self.bottleneck.score(
                 simulated,
                 side,
             )
-            * self.weight_config.LOOKAHEAD_WEIGHT
-        )
 
-        bottleneck_score = self.bottleneck.score(
-            simulated,
-            side,
-        )
-
-        opponent_pressure_score = (
-            self.opponent_pressure.score(
-                simulated,
-                side,
+        opponent_pressure_score = 0
+        if compute_level != "critical":
+            opponent_pressure_score = (
+                self.opponent_pressure.score(
+                    simulated,
+                    side,
+                )
+                * self.weight_config.OPPONENT_PRESSURE_WEIGHT
             )
-            * self.weight_config.OPPONENT_PRESSURE_WEIGHT
-        )
 
         total = (
             space_score

@@ -55,6 +55,7 @@ class SnakeStrategy:
         ] = {}
 
         self.current_mode = "balanced"
+        self.last_compute_level = "normal"
 
     def choose_move(
         self,
@@ -63,7 +64,12 @@ class SnakeStrategy:
         remaining_moves: int | None = None,
         my_score: int = 0,
         enemy_score: int = 0,
+        compute_level: str = "normal",
     ) -> str:
+        if compute_level not in ("normal", "busy", "critical"):
+            raise ValueError(f"Nivel de cálculo desconocido: {compute_level}")
+
+        self.last_compute_level = compute_level
         self.current_mode = self._choose_mode(
             remaining_moves=remaining_moves,
             my_score=my_score,
@@ -72,12 +78,14 @@ class SnakeStrategy:
 
         enemy = "B" if side == "A" else "A"
 
-        self.last_enemy_prediction = (
-            self.opponent_model.predicted_move(
-                board,
-                enemy,
+        self.last_enemy_prediction = None
+        if compute_level != "critical":
+            self.last_enemy_prediction = (
+                self.opponent_model.predicted_move(
+                    board,
+                    enemy,
+                )
             )
-        )
 
         self.last_analysis = {}
 
@@ -90,6 +98,7 @@ class SnakeStrategy:
                 board,
                 side,
                 direction,
+                compute_level=compute_level,
             )
 
             analysis["two_ply"] = 0
@@ -136,7 +145,7 @@ class SnakeStrategy:
                 score_gap <= self.weight_config.DEEP_SEARCH_GAP
             )
 
-        if should_search_deeper:
+        if compute_level == "normal" and should_search_deeper:
             for direction, _ in deep_candidates:
                 two_ply_score = (
                     self.two_ply.score(
@@ -160,7 +169,7 @@ class SnakeStrategy:
             candidates=candidates,
         )
 
-        if critical_position:
+        if compute_level == "normal" and critical_position:
             self._deep_search_candidates(
                 board,
                 side,
