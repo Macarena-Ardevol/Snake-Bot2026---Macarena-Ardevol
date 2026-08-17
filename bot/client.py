@@ -74,7 +74,7 @@ class BotClient:
             print("\nBot detenido.")
 
     async def connect_forever(self) -> None:
-        uri = f"{SERVER_URI}?token={self.token}"
+        uri = self._websocket_uri()
 
         while True:
             try:
@@ -91,6 +91,9 @@ class BotClient:
                 print(f"Error de conexión: {error}")
                 print("Reintentando en 3 segundos...")
                 await asyncio.sleep(3)
+
+    def _websocket_uri(self) -> str:
+        return f"{SERVER_URI}?token={self.token}"
 
     async def listen(self, websocket: Any) -> None:
         try:

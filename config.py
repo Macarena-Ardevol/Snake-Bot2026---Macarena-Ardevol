@@ -6,5 +6,5 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 SERVER_URI = (
-    "wss://codechallenge-server.up.railway.app/ws"
+    "wss://server.codechallenge.net.ar/ws"
 )
