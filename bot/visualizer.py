@@ -53,6 +53,17 @@ class LiveStateHub:
         with self._lock:
             self._subscribers.discard(subscriber)
 
+    def notify_subscribers(self) -> None:
+        """Despierta streams SSE sin publicar ni serializar un estado."""
+        with self._lock:
+            subscribers = tuple(self._subscribers)
+
+        for subscriber in subscribers:
+            try:
+                subscriber.put_nowait(None)
+            except queue.Full:
+                pass
+
     def _track_finished(self, game_id: str, state: dict[str, Any]) -> None:
         if state.get("status") != "finished":
             if game_id in self._finished_order:
@@ -76,6 +87,7 @@ class LiveVisualizer:
         self.hub = LiveStateHub()
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._stopping = threading.Event()
         self._index = (
             Path(__file__).parent
             / "static"
@@ -86,6 +98,7 @@ class LiveVisualizer:
         if self._server is not None:
             return True
 
+        self._stopping.clear()
         handler = self._make_handler()
 
         try:
@@ -111,6 +124,8 @@ class LiveVisualizer:
         if self._server is None:
             return
 
+        self._stopping.set()
+        self.hub.notify_subscribers()
         self._server.shutdown()
         self._server.server_close()
         self._server = None
@@ -122,6 +137,7 @@ class LiveVisualizer:
     def _make_handler(self) -> type[BaseHTTPRequestHandler]:
         hub = self.hub
         index = self._index
+        stopping = self._stopping
 
         class VisualizerHandler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -155,9 +171,11 @@ class LiveVisualizer:
                 subscriber = hub.subscribe()
 
                 try:
-                    while True:
+                    while not stopping.is_set():
                         try:
                             subscriber.get(timeout=15)
+                            if stopping.is_set():
+                                break
                             raw_state = hub.snapshot()
                             message = f"data: {raw_state}\n\n"
                         except queue.Empty:

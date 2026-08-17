@@ -14,6 +14,34 @@ class TestLiveStateHub(unittest.TestCase):
     def states(hub):
         return json.loads(hub.snapshot())["games"]
 
+    @staticmethod
+    def wait_until(condition, timeout=1.0, action=None):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if condition():
+                return True
+            if action is not None:
+                action()
+            time.sleep(0.005)
+        return condition()
+
+    @staticmethod
+    def subscriber_count(visualizer):
+        with visualizer.hub._lock:
+            return len(visualizer.hub._subscribers)
+
+    @staticmethod
+    def receive_until(client, expected, timeout=1.0):
+        deadline = time.monotonic() + timeout
+        received = b""
+        while expected not in received and time.monotonic() < deadline:
+            client.settimeout(max(0.01, deadline - time.monotonic()))
+            try:
+                received += client.recv(8192)
+            except TimeoutError:
+                break
+        return received
+
     def test_new_subscriber_receives_latest_state(self):
         hub = LiveStateHub()
         hub.publish({
@@ -186,21 +214,74 @@ class TestLiveStateHub(unittest.TestCase):
                 b"Connection: close\r\n\r\n"
             )
             self.assertIn(b"200 OK", client.recv(8192))
+            self.assertTrue(self.wait_until(
+                lambda: self.subscriber_count(visualizer) == 1,
+            ))
             client.close()
 
-            for score in range(3):
-                visualizer.publish({"game_id": "active", "score_1": score})
-
-            for _ in range(50):
-                with visualizer.hub._lock:
-                    subscribers = len(visualizer.hub._subscribers)
-                if subscribers == 0:
-                    break
-                time.sleep(0.01)
-
-            self.assertEqual(subscribers, 0)
+            score = iter(range(1000))
+            self.assertTrue(self.wait_until(
+                lambda: self.subscriber_count(visualizer) == 0,
+                action=lambda: visualizer.publish({
+                    "game_id": "active",
+                    "score_1": next(score),
+                }),
+            ))
             self.assertEqual(errors, [])
         finally:
+            visualizer.stop()
+
+    def test_multiple_sse_clients_receive_updates_and_cleanup(self):
+        visualizer = LiveVisualizer(port=0)
+        if not visualizer.start():
+            self.skipTest("El entorno no permite abrir un puerto local")
+
+        clients = []
+        port = visualizer._server.server_address[1]
+        try:
+            for _ in range(3):
+                client = socket.create_connection(("127.0.0.1", port), timeout=2)
+                client.sendall(b"GET /events HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                self.assertIn(b"200 OK", client.recv(8192))
+                clients.append(client)
+
+            self.assertTrue(self.wait_until(
+                lambda: self.subscriber_count(visualizer) == 3,
+            ))
+            visualizer.publish({"game_id": "shared", "score_1": 7})
+            for client in clients:
+                self.assertIn(
+                    b'"game_id": "shared"',
+                    self.receive_until(client, b'"game_id": "shared"'),
+                )
+        finally:
+            for client in clients:
+                client.close()
+            visualizer.stop()
+
+    def test_stop_cleans_open_sse_subscribers(self):
+        visualizer = LiveVisualizer(port=0)
+        if not visualizer.start():
+            self.skipTest("El entorno no permite abrir un puerto local")
+
+        client = socket.create_connection(
+            ("127.0.0.1", visualizer._server.server_address[1]),
+            timeout=2,
+        )
+        try:
+            client.sendall(b"GET /events HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            self.assertIn(b"200 OK", client.recv(8192))
+            self.assertTrue(self.wait_until(
+                lambda: self.subscriber_count(visualizer) == 1,
+            ))
+
+            visualizer.stop()
+
+            self.assertTrue(self.wait_until(
+                lambda: self.subscriber_count(visualizer) == 0,
+            ))
+        finally:
+            client.close()
             visualizer.stop()
 
 
