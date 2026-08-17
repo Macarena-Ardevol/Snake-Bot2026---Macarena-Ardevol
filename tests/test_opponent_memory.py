@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -52,6 +53,27 @@ class TestOpponentMemory(unittest.TestCase):
             probability,
             1.0,
         )
+
+    def test_concurrent_updates_are_not_lost_and_json_stays_valid(self):
+        threads = [
+            threading.Thread(
+                target=self.memory.record_move,
+                args=("enemy", "left"),
+            )
+            for _ in range(20)
+        ]
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        stats = self.memory.get_stats("enemy")
+        reloaded = OpponentMemory(str(self.memory.file_path))
+
+        self.assertEqual(stats["moves"], 20)
+        self.assertEqual(stats["directions"]["left"], 20)
+        self.assertEqual(reloaded.get_stats("enemy")["moves"], 20)
 
     def test_records_food_aggression(self):
         self.memory.record_move(

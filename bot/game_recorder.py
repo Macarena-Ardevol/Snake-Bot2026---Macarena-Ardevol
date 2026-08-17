@@ -1,4 +1,5 @@
 import json
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ class GameRecorder:
         self.directory.mkdir(parents=True, exist_ok=True)
 
         self.games: dict[str, list[dict[str, Any]]] = {}
+        self._lock = threading.RLock()
 
     def record_turn(
         self,
@@ -46,15 +48,14 @@ class GameRecorder:
             "analysis": analysis,
         }
 
-        self.games.setdefault(
-            game_id,
-            [],
-        ).append(turn)
+        with self._lock:
+            self.games.setdefault(game_id, []).append(turn)
+            turn_count = len(self.games[game_id])
 
         print(
             f"[RECORDER] turnos guardados para "
             f"{game_id}: "
-            f"{len(self.games[game_id])}"
+            f"{turn_count}"
         )
 
     def finish_game(
@@ -77,7 +78,8 @@ class GameRecorder:
             f"{len(self.games.get(game_id, []))}"
         )
 
-        turns = self.games.get(game_id, [])
+        with self._lock:
+            turns = list(self.games.get(game_id, []))
         bot_side = next(
             (
                 turn.get("side")
@@ -106,20 +108,11 @@ class GameRecorder:
             / f"game_{game_id}.json"
         )
 
-        with file_path.open(
-            "w",
-            encoding="utf-8",
-        ) as file:
-            json.dump(
-                game_data,
-                file,
-                ensure_ascii=False,
-                indent=2,
-            )
-
-        self.games.pop(
-            game_id,
-            None,
-        )
+        temporary_path = file_path.with_suffix(file_path.suffix + ".tmp")
+        with self._lock:
+            with temporary_path.open("w", encoding="utf-8") as file:
+                json.dump(game_data, file, ensure_ascii=False, indent=2)
+            temporary_path.replace(file_path)
+            self.games.pop(game_id, None)
 
         return file_path
