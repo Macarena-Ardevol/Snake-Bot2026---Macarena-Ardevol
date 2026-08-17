@@ -60,7 +60,7 @@ class SlowStrategy:
     def set_opponent(self, opponent: str | None) -> None:
         self.opponent = opponent
 
-    def choose_move(self, *args) -> str:
+    def choose_move(self, *args, **kwargs) -> str:
         if self.events is not None:
             self.events.append("decide")
         time.sleep(0.15)
@@ -149,10 +149,10 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
 
     async def test_many_games_send_correct_identifiers_and_isolated_state(self):
         class FastStrategy(SlowStrategy):
-            def choose_move(self, *args) -> str:
+            def choose_move(self, *args, **kwargs) -> str:
                 return "down"
 
-        for game_count in (2, 10, 50, 100):
+        for game_count in (2, 10, 50, 70, 100):
             client = BotClient("test-token")
             client.recorder = FakeRecorder()
             client.strategies = {
@@ -193,7 +193,9 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
         events = []
 
         class OrderedStrategy(SlowStrategy):
-            def choose_move(inner_self, board, side, remaining, own, enemy):
+            def choose_move(
+                inner_self, board, side, remaining, own, enemy, **kwargs
+            ):
                 events.append(f"start:{remaining}")
                 time.sleep(0.02)
                 events.append(f"end:{remaining}")
@@ -240,7 +242,7 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
 
     async def test_strategy_exception_does_not_cancel_other_games(self):
         class BrokenStrategy(SlowStrategy):
-            def choose_move(self, *args):
+            def choose_move(self, *args, **kwargs):
                 raise RuntimeError("broken")
 
         client = BotClient("test-token")

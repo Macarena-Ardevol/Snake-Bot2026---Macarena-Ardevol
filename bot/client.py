@@ -1,6 +1,8 @@
 import asyncio
 import json
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Any
 
 import websockets
@@ -10,6 +12,7 @@ from ai.opponent_memory import OpponentMemory
 from ai.opponent_observer import OpponentObserver
 from ai.strategy import SnakeStrategy
 from bot.game_recorder import GameRecorder
+from bot.load_controller import AdaptiveLoadController
 from bot.visualizer import LiveVisualizer
 from config import SERVER_URI
 from game.board import GameBoard
@@ -38,11 +41,12 @@ class BotClient:
         self.game_locks: dict[str, asyncio.Lock] = {}
         self.event_tasks: set[asyncio.Task] = set()
         self.send_lock = asyncio.Lock()
+        decision_workers = max(1, decision_workers)
         # choose_move es CPU-bound en Python. Un pool pequeño mantiene el
         # event loop receptivo y evita que decenas de threads compitan por el
         # GIL, lo que empeora la latencia media en ráfagas grandes.
         self.decision_executor = ThreadPoolExecutor(
-            max_workers=max(1, decision_workers),
+            max_workers=decision_workers,
             thread_name_prefix="snake-decision",
         )
         self.background_executor = ThreadPoolExecutor(
@@ -50,6 +54,8 @@ class BotClient:
             thread_name_prefix="snake-background",
         )
         self.event_slots = asyncio.Semaphore(max(1, max_pending_events))
+        self.load_controller = AdaptiveLoadController(decision_workers)
+        self.decision_metrics = deque(maxlen=1000)
 
         self.recorder = GameRecorder()
         self.opponent_observer = OpponentObserver()
@@ -324,34 +330,42 @@ class BotClient:
             )
 
         decision_start = time.perf_counter()
+        load_snapshot = self.load_controller.decision_started()
 
         try:
-            direction = await asyncio.get_running_loop().run_in_executor(
-                self.decision_executor,
-                strategy.choose_move,
-                board,
-                side,
-                remaining_moves,
-                my_score,
-                enemy_score,
-            )
-        except Exception as error:
-            # Una estrategia compleja nunca debe costarnos un timeout. Si el
-            # análisis falla, enviamos de inmediato el primer movimiento que
-            # el tablero actual considera legal.
-            legal_moves = [
-                direction
-                for direction, is_legal in board.valid_moves(side).items()
-                if is_legal
-            ]
+            try:
+                choose_move = partial(
+                    strategy.choose_move,
+                    board,
+                    side,
+                    remaining_moves,
+                    my_score,
+                    enemy_score,
+                    compute_level=load_snapshot.level,
+                )
+                direction = await asyncio.get_running_loop().run_in_executor(
+                    self.decision_executor,
+                    choose_move,
+                )
+            except Exception as error:
+                # Una estrategia compleja nunca debe costarnos un timeout. Si el
+                # análisis falla, enviamos de inmediato el primer movimiento que
+                # el tablero actual considera legal.
+                legal_moves = [
+                    direction
+                    for direction, is_legal in board.valid_moves(side).items()
+                    if is_legal
+                ]
 
-            direction = legal_moves[0] if legal_moves else "up"
-            strategy.last_analysis = {}
+                direction = legal_moves[0] if legal_moves else "up"
+                strategy.last_analysis = {}
 
-            print(
-                "La estrategia falló; usando movimiento seguro "
-                f"{direction}: {error}"
-            )
+                print(
+                    "La estrategia falló; usando movimiento seguro "
+                    f"{direction}: {error}"
+                )
+        finally:
+            self.load_controller.decision_finished()
 
         decision_time = (
             time.perf_counter()
@@ -377,6 +391,14 @@ class BotClient:
             - turn_start
         )
 
+        self.decision_metrics.append({
+            "game_id": game_id,
+            "compute_level": load_snapshot.level,
+            "pending_decisions": load_snapshot.pending_decisions,
+            "decision_ms": decision_time * 1000,
+            "receive_to_send_ms": send_time * 1000,
+        })
+
         print(
             f"Movimiento enviado: {direction} "
             f"| decisión: "
@@ -395,6 +417,8 @@ class BotClient:
             strategy,
             direction,
             decision_time,
+            load_snapshot.level,
+            load_snapshot.pending_decisions,
         )
 
     def _post_process_turn(
@@ -406,6 +430,8 @@ class BotClient:
         strategy: SnakeStrategy,
         direction: str,
         decision_time: float,
+        compute_level: str,
+        pending_decisions: int,
     ) -> None:
         game_id = data["game_id"]
         side = data["side"]
@@ -414,6 +440,8 @@ class BotClient:
             "status": "playing",
             "direction": direction,
             "decision_ms": decision_time * 1000,
+            "compute_level": compute_level,
+            "pending_decisions": pending_decisions,
         })
 
         if strategy.last_enemy_prediction:
@@ -422,6 +450,8 @@ class BotClient:
             ] = (
                 strategy.last_enemy_prediction
             )
+        else:
+            self.enemy_predictions.pop(game_id, None)
 
         if (
             previous_board is not None
