@@ -268,6 +268,7 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
         client.previous_boards = {"one": object(), "two": object()}
         client.opponents = {"two": "r2"}
         client.game_locks = {"one": asyncio.Lock(), "two": asyncio.Lock()}
+        client.bot_sides = {"one": "B", "two": "A"}
 
         await client.process_game_over({
             "game_id": "one", "player_1": "me", "player_2": "r1",
@@ -278,6 +279,31 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
         self.assertIn("two", client.strategies)
         self.assertIn("two", client.previous_boards)
         self.assertIn("two", client.game_locks)
+        self.assertNotIn("one", client.bot_sides)
+        self.assertEqual(client.bot_sides["two"], "A")
+
+    async def test_game_over_publishes_established_side_not_contradictory_side(self):
+        client = BotClient("test-token")
+        client.recorder = FakeRecorder()
+        client.strategies["real-game"] = SlowStrategy()
+        turn = self.turn("real-game", "macarenaardevol")
+        turn.update({
+            "side": "B", "player_1": "arielcohen",
+            "player_2": "macarenaardevol", "score_1": 1635,
+            "score_2": 1139,
+        })
+        await client.process_turn(FakeWebSocket(), turn)
+        self.assertEqual(client.bot_sides["real-game"], "B")
+
+        await client.process_game_over({
+            "game_id": "real-game", "side": "A",
+            "player_1": "arielcohen", "player_2": "macarenaardevol",
+            "score_1": 1635, "score_2": 1140, "winner": "arielcohen",
+        })
+
+        final_state = client.visualizer.hub._games["real-game"]
+        self.assertEqual(final_state["side"], "B")
+        self.assertEqual(final_state["status"], "finished")
 
     async def test_strategy_exception_does_not_cancel_other_games(self):
         class BrokenStrategy(SlowStrategy):

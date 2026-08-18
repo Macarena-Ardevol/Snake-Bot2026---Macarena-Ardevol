@@ -1,0 +1,275 @@
+{
+  "candidate_cases": [
+    {
+      "board": "|    a          |\n|    aA         |\n|               |\n|            *  |\n|          *    |\n|               |\n|               |\n|          B    |\n|          b    |\n|          b    |\n|          b    |\n|               |\n|  *            |\n|               |\n|               |\n",
+      "chosen_direction": "left",
+      "compute_level": "normal",
+      "decision_metrics": {
+        "decision_ms": 48.22549999516923,
+        "pending_decisions": 1,
+        "receive_to_send_ms": 48.610167010338046
+      },
+      "decision_reason": "highest_total",
+      "game_id": "a2b768b8-9b19-11f1-90ac-a2aaa0a99892",
+      "interesting_foods": [
+        {
+          "classification": "off_shortest_path",
+          "distance": 3,
+          "food": [
+            4,
+            10
+          ],
+          "shortest_routes": [
+            [
+              "up",
+              "up",
+              "up"
+            ]
+          ]
+        }
+      ],
+      "mode": "balanced",
+      "my_score": 109,
+      "opponent": "santiagomartinez",
+      "recorded_enemy_prediction": {
+        "confidence": 0.0,
+        "direction": "down"
+      },
+      "recorded_food_race": {
+        "distance_basis": "after_candidate_move",
+        "enemy_distance": 8,
+        "food": [
+          4,
+          10
+        ],
+        "my_distance": 4,
+        "result": "winning",
+        "target_status": "known"
+      },
+      "recorded_target_food": {
+        "distance": 5,
+        "food": [
+          4,
+          10
+        ],
+        "path": [
+          "left",
+          "up",
+          "up",
+          "up",
+          "right"
+        ],
+        "shortest_path_count": "unknown",
+        "status": "known"
+      },
+      "remaining_moves": 279,
+      "rival_score": 11,
+      "side": "B",
+      "turn_index": 10
+    },
+    {
+      "board": "|           *   |\n|*              |\n|               |\n|               |\n|               |\n|     A         |\n|     a         |\n|     aa        |\n|               |\n|               |\n|         B  *  |\n|        bb     |\n|        b      |\n|     bbbb      |\n|       bb      |\n",
+      "chosen_direction": "up",
+      "compute_level": "normal",
+      "decision_metrics": {
+        "decision_ms": 96.00958300870843,
+        "pending_decisions": 1,
+        "receive_to_send_ms": 96.48220799863338
+      },
+      "decision_reason": "highest_total",
+      "game_id": "a2b768b8-9b19-11f1-90ac-a2aaa0a99892",
+      "interesting_foods": [
+        {
+          "classification": "off_shortest_path",
+          "distance": 3,
+          "food": [
+            10,
+            12
+          ],
+          "shortest_routes": [
+            [
+              "right",
+              "right",
+              "right"
+            ]
+          ]
+        }
+      ],
+      "mode": "balanced",
+      "my_score": 743,
+      "opponent": "santiagomartinez",
+      "recorded_enemy_prediction": {
+        "confidence": 0.1292517006802721,
+        "direction": "up"
+      },
+      "recorded_food_race": {
+        "distance_basis": "after_candidate_move",
+        "enemy_distance": 12,
+        "food": [
+          10,
+          12
+        ],
+        "my_distance": 4,
+        "result": "winning",
+        "target_status": "known"
+      },
+      "recorded_target_food": {
+        "distance": 5,
+        "food": [
+          10,
+          12
+        ],
+        "path": [
+          "up",
+          "right",
+          "down",
+          "right",
+          "right"
+        ],
+        "shortest_path_count": "unknown",
+        "status": "known"
+      },
+      "remaining_moves": 199,
+      "rival_score": 150,
+      "side": "B",
+      "turn_index": 50
+    },
+    {
+      "board": "|               |\n|               |\n|    *          |\n|               |\n|               |\n|               |\n| aa            |\n| aa            |\n| A  bbbbbbbbb  |\n| * Bb       b  |\n|          bbb  |\n|               |\n|               |\n|               |\n|       *       |\n",
+      "chosen_direction": "up",
+      "compute_level": "normal",
+      "decision_metrics": {
+        "decision_ms": 64.54329199914355,
+        "pending_decisions": 1,
+        "receive_to_send_ms": 65.00066700391471
+      },
+      "decision_reason": "highest_total",
+      "game_id": "a2b768b8-9b19-11f1-90ac-a2aaa0a99892",
+      "interesting_foods": [
+        {
+          "classification": "off_shortest_path",
+          "distance": 2,
+          "food": [
+            9,
+            1
+          ],
+          "shortest_routes": [
+            [
+              "left",
+              "left"
+            ]
+          ]
+        }
+      ],
+      "mode": "defensive",
+      "my_score": 1307,
+      "opponent": "santiagomartinez",
+      "recorded_enemy_prediction": {
+        "confidence": 0.1525423728813559,
+        "direction": "down"
+      },
+      "recorded_food_race": {
+        "distance_basis": "after_candidate_move",
+        "enemy_distance": 11,
+        "food": [
+          2,
+          4
+        ],
+        "my_distance": 7,
+        "result": "winning",
+        "target_status": "known"
+      },
+      "recorded_target_food": {
+        "distance": 4,
+        "food": [
+          9,
+          1
+        ],
+        "path": [
+          "up",
+          "left",
+          "down",
+          "left"
+        ],
+        "shortest_path_count": "unknown",
+        "status": "known"
+      },
+      "remaining_moves": 61,
+      "rival_score": 318,
+      "side": "B",
+      "turn_index": 119
+    }
+  ],
+  "filters": {
+    "game_id": "a2b768b8-9b19-11f1-90ac-a2aaa0a99892",
+    "losses_only": false
+  },
+  "limitations": [
+    "turnos de schema anterior pueden no incluir compute_level ni decision_context",
+    "BFS usa el tablero estático del turno y no modela movimientos futuros del rival",
+    "analysis histórico puede faltar o contener componentes distintos",
+    "la intención del movimiento elegido no está registrada explícitamente"
+  ],
+  "outcome_comparison": {
+    "loss": {
+      "adjacent_food_ignored": 0,
+      "compute_levels": {},
+      "distance_2_off_shortest_path": 0,
+      "mean_chosen_minus_food_total": null,
+      "modes": {},
+      "turns": 0,
+      "unknown_adjacent_reasons": 0
+    },
+    "warning": "Comparación descriptiva; no implica significancia ni causalidad.",
+    "win": {
+      "adjacent_food_ignored": 0,
+      "compute_levels": {
+        "normal": 150
+      },
+      "distance_2_off_shortest_path": 1,
+      "mean_chosen_minus_food_total": null,
+      "modes": {
+        "balanced": 88,
+        "defensive": 62
+      },
+      "turns": 150,
+      "unknown_adjacent_reasons": 0
+    }
+  },
+  "source_directory": "data/games",
+  "status": "ok",
+  "summary": {
+    "adjacent_food_not_taken": 0,
+    "adjacent_miss_reasons": {},
+    "apparently_close_but_blocked": 0,
+    "chosen_equivalent_shortest_routes": 19,
+    "food_opportunities": {
+      "1": {
+        "count": 16,
+        "on_any_shortest_path": 16,
+        "rate": 1.0
+      },
+      "2": {
+        "count": 17,
+        "on_any_shortest_path": 16,
+        "rate": 0.9411764705882353
+      },
+      "3": {
+        "count": 18,
+        "on_any_shortest_path": 16,
+        "rate": 0.8888888888888888
+      }
+    },
+    "foods_with_multiple_shortest_routes": 19,
+    "game_files_found": 1,
+    "games_selected": 1,
+    "games_with_turns": 1,
+    "outcomes": {
+      "win": 1
+    },
+    "suspicious_decisions": 0,
+    "turns_analyzed": 150
+  },
+  "suspicious_decisions": [],
+  "warnings": []
+}

@@ -64,6 +64,7 @@ class BotClient:
         # Guardamos información separada por partida.
         self.previous_boards: dict[str, GameBoard] = {}
         self.opponents: dict[str, str] = {}
+        self.bot_sides: dict[str, str] = {}
 
         self.enemy_predictions: dict[
             str,
@@ -283,6 +284,10 @@ class BotClient:
 
         board = GameBoard(board_text)
 
+        # El lado recibido en un turno jugable establece la perspectiva de la
+        # sesión. Eventos finales no deben poder cambiarla posteriormente.
+        self.bot_sides.setdefault(game_id, side)
+
         opponent = self._get_opponent(
             data,
             side,
@@ -453,6 +458,7 @@ class BotClient:
         try:
             self.visualizer.publish({
                 **data,
+                "side": self.bot_sides.get(game_id, side),
                 "status": "playing",
                 "direction": direction,
                 "decision_ms": decision_time * 1000,
@@ -651,6 +657,7 @@ class BotClient:
         try:
             self.visualizer.publish({
                 **data,
+                "side": self.bot_sides.get(game_id),
                 "status": "finished",
             })
         except Exception as error:
@@ -698,6 +705,7 @@ class BotClient:
         self.opponents.pop(game_id, None)
         self.enemy_predictions.pop(game_id, None)
         self.strategies.pop(game_id, None)
+        self.bot_sides.pop(game_id, None)
         self.game_locks.pop(game_id, None)
 
     def _get_opponent(

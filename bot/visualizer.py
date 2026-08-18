@@ -25,8 +25,17 @@ class LiveStateHub:
                 key = str(game_id)
                 previous = self._games.get(key, {})
                 incoming = state.copy()
-                incoming_side = incoming.get("side")
-                if incoming_side not in ("A", "B"):
+                for player_field in ("player_1", "player_2"):
+                    if previous.get(player_field):
+                        # Los jugadores pertenecen a la identidad estable de
+                        # la sesión, no al resultado mutable de game_over.
+                        incoming[player_field] = previous[player_field]
+                established_side = previous.get("side")
+                if established_side in ("A", "B"):
+                    # La perspectiva queda fijada por el primer estado válido
+                    # de la partida. Ni siquiera otro A/B posterior la cambia.
+                    incoming["side"] = established_side
+                elif incoming.get("side") not in ("A", "B"):
                     bot_side = incoming.get("bot_side")
                     if bot_side in ("A", "B"):
                         incoming["side"] = bot_side
