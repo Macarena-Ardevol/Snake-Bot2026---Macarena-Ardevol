@@ -56,6 +56,7 @@ class SnakeStrategy:
 
         self.current_mode = "balanced"
         self.last_compute_level = "normal"
+        self.last_decision_context: dict = {}
 
     def choose_move(
         self,
@@ -79,6 +80,7 @@ class SnakeStrategy:
         enemy = "B" if side == "A" else "A"
 
         self.last_enemy_prediction = None
+        prediction_confidence = None
         if compute_level != "critical":
             self.last_enemy_prediction = (
                 self.opponent_model.predicted_move(
@@ -86,6 +88,7 @@ class SnakeStrategy:
                     enemy,
                 )
             )
+            prediction_confidence = self.opponent_model.prediction_confidence()
 
         self.last_analysis = {}
 
@@ -118,6 +121,21 @@ class SnakeStrategy:
 
         # Si no hay movimientos legales.
         if not candidates:
+            for candidate_analysis in self.last_analysis.values():
+                candidate_analysis.pop("candidate_context", None)
+            self.last_decision_context = {
+                "compute_level": compute_level,
+                "mode": self.current_mode,
+                "chosen_direction": "up",
+                "decision_reason": "fallback",
+                "valid_candidate_count": 0,
+                "target_food": {"status": "none"},
+                "food_race": {"target_status": "unknown"},
+                "enemy_prediction": {
+                    "direction": self.last_enemy_prediction,
+                    "confidence": prediction_confidence,
+                },
+            }
             return "up"
 
         # Ordenamos por evaluación inmediata.
@@ -193,6 +211,36 @@ class SnakeStrategy:
             if adjusted["total"] > best_score:
                 best_score = adjusted["total"]
                 best_move = direction
+
+        chosen_context = self.last_analysis[best_move].get(
+            "candidate_context", {}
+        )
+        target_food = dict(chosen_context.get("food_target", {"status": "none"}))
+        food_race = dict(chosen_context.get("food_race", {"target_status": "unknown"}))
+        for candidate_analysis in self.last_analysis.values():
+            candidate_analysis.pop("candidate_context", None)
+        eating = board.next_position(board.my_head(side), best_move) in board.food
+        reason = "only_safe_move" if len(candidates) == 1 else "highest_total"
+        if (
+            len(candidates) > 1
+            and eating
+            and self.last_analysis[best_move].get("food_safety", 0) > 0
+        ):
+            reason = "safe_food"
+
+        self.last_decision_context = {
+            "compute_level": compute_level,
+            "mode": self.current_mode,
+            "chosen_direction": best_move,
+            "decision_reason": reason,
+            "valid_candidate_count": len(candidates),
+            "target_food": target_food,
+            "food_race": food_race,
+            "enemy_prediction": {
+                "direction": self.last_enemy_prediction,
+                "confidence": prediction_confidence,
+            },
+        }
 
         return best_move
    

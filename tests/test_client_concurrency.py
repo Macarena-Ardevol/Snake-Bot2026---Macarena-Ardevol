@@ -55,6 +55,7 @@ class SlowStrategy:
         self.last_analysis = {"down": {"total": 1}}
         self.opponent = None
         self.current_mode = "balanced"
+        self.last_decision_context = {}
         self.events = events
 
     def set_opponent(self, opponent: str | None) -> None:
@@ -190,6 +191,9 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
                 strategy.last_enemy_prediction = f"prediction_{index}"
                 strategy.last_analysis = {"down": {"total": index}}
                 strategy.current_mode = f"mode_{index}"
+                strategy.last_decision_context = {
+                    "marker": f"context_{index}"
+                }
             websocket = FakeWebSocket()
 
             await asyncio.gather(*(
@@ -211,6 +215,14 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
                 recorded = client.recorder.turns[f"game_{index}"]
                 self.assertEqual(recorded["analysis"]["down"]["total"], index)
                 self.assertEqual(recorded["mode"], f"mode_{index}")
+                self.assertEqual(
+                    recorded["decision_context"]["marker"],
+                    f"context_{index}",
+                )
+                self.assertIn(recorded["compute_level"], ("normal", "busy", "critical"))
+                self.assertGreaterEqual(recorded["decision_metrics"]["pending_decisions"], 1)
+                self.assertGreaterEqual(recorded["decision_metrics"]["decision_ms"], 0)
+                self.assertGreaterEqual(recorded["decision_metrics"]["receive_to_send_ms"], 0)
                 self.assertEqual(
                     client.enemy_predictions[f"game_{index}"],
                     f"prediction_{index}",
@@ -283,6 +295,29 @@ class TestClientConcurrency(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual({m["data"]["game_id"] for m in websocket.messages}, {"broken", "healthy"})
+
+    async def test_recorder_failure_happens_after_send(self):
+        events = []
+        client = BotClient("test-token")
+        client.strategies = {"game": SlowStrategy(events)}
+
+        class BrokenRecorder:
+            def record_turn(self, **kwargs):
+                events.append("record")
+                raise RuntimeError("disk unavailable")
+
+        class OrderedSocket(FakeWebSocket):
+            async def send(inner_self, raw_message):
+                events.append("send")
+                await super().send(raw_message)
+
+        client.recorder = BrokenRecorder()
+        websocket = OrderedSocket()
+        with self.assertRaises(RuntimeError):
+            await client.process_turn(websocket, self.turn("game", "rival"))
+
+        self.assertEqual(events[:3], ["decide", "send", "record"])
+        self.assertEqual(len(websocket.messages), 1)
 
     async def test_listener_finishes_without_orphan_event_tasks(self):
         client = BotClient("test-token")

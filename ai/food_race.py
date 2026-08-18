@@ -15,13 +15,29 @@ class FoodRaceAnalyzer:
         board: GameBoard,
         side: str,
     ) -> float:
+        return self.analyze(board, side)["score"]
+
+    def analyze(
+        self,
+        board: GameBoard,
+        side: str,
+    ) -> dict:
+        """Devuelve el mismo score junto con el objetivo que lo produjo."""
         if not board.food:
-            return 0
+            return {
+                "score": 0,
+                "target_status": "none",
+                "food": None,
+                "my_distance": None,
+                "enemy_distance": None,
+                "result": "unknown",
+            }
 
         my_head = board.my_head(side)
         enemy_head = board.enemy_head(side)
 
         best_score = float("-inf")
+        best_entries = []
 
         for food in board.food:
             my_path = self.pathfinder.shortest_path(
@@ -53,12 +69,51 @@ class FoodRaceAnalyzer:
                 enemy_distance,
             )
 
-            best_score = max(best_score, food_score)
+            entry = {
+                "food": list(food),
+                "my_distance": my_distance,
+                "enemy_distance": enemy_distance,
+                "result": self._result(my_distance, enemy_distance),
+            }
+            if food_score > best_score:
+                best_score = food_score
+                best_entries = [entry]
+            elif food_score == best_score:
+                best_entries.append(entry)
 
         if best_score == float("-inf"):
-            return 0
+            return {
+                "score": 0,
+                "target_status": "none",
+                "food": None,
+                "my_distance": None,
+                "enemy_distance": None,
+                "result": "unknown",
+            }
 
-        return best_score
+        unique = len(best_entries) == 1
+        selected = best_entries[0] if unique else {}
+        return {
+            "score": best_score,
+            "target_status": "known" if unique else "ambiguous",
+            "food": selected.get("food"),
+            "my_distance": selected.get("my_distance"),
+            "enemy_distance": selected.get("enemy_distance"),
+            "result": selected.get("result", "unknown"),
+        }
+
+    @staticmethod
+    def _result(
+        my_distance: int | None,
+        enemy_distance: int | None,
+    ) -> str:
+        if my_distance is None:
+            return "unknown"
+        if enemy_distance is None or my_distance < enemy_distance:
+            return "winning"
+        if my_distance == enemy_distance:
+            return "tied"
+        return "losing"
 
     def _compare_distances(
         self,

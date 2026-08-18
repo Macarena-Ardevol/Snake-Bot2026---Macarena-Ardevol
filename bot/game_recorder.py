@@ -24,6 +24,9 @@ class GameRecorder:
         direction: str,
         analysis: dict,
         mode: str | None = None,
+        compute_level: str | None = None,
+        decision_metrics: dict[str, Any] | None = None,
+        decision_context: dict[str, Any] | None = None,
     ) -> None:
         """
         Guarda el estado recibido y la decisión tomada.
@@ -35,6 +38,7 @@ class GameRecorder:
         )
 
         turn = {
+            "schema_version": 2,
             "timestamp": datetime.now().isoformat(),
             "remaining_moves": data.get("remaining_moves"),
             "side": data.get("side"),
@@ -45,6 +49,9 @@ class GameRecorder:
             "board": data.get("board"),
             "chosen_direction": direction,
             "mode": mode,
+            "compute_level": compute_level,
+            "decision_metrics": decision_metrics or {},
+            "decision_context": decision_context or {},
             "analysis": analysis,
         }
 
@@ -90,6 +97,7 @@ class GameRecorder:
         )
 
         game_data = {
+            "schema_version": 2,
             "game_id": game_id,
             "finished_at": datetime.now().isoformat(),
             "player_1": data.get("player_1"),

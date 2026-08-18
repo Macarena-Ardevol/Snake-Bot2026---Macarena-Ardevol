@@ -52,7 +52,7 @@ class RealMatchAuditor:
             "outcome_comparison": comparison,
             "warnings": warnings,
             "limitations": [
-                "compute_level no está registrado en los JSON actuales",
+                "turnos de schema anterior pueden no incluir compute_level ni decision_context",
                 "BFS usa el tablero estático del turno y no modela movimientos futuros del rival",
                 "analysis histórico puede faltar o contener componentes distintos",
                 "la intención del movimiento elegido no está registrada explícitamente",
@@ -128,6 +128,16 @@ class RealMatchAuditor:
         chosen = turn.get("chosen_direction")
         valid_moves = board.valid_moves(side)
         analysis = turn.get("analysis") if isinstance(turn.get("analysis"), dict) else {}
+        decision_context = (
+            turn.get("decision_context")
+            if isinstance(turn.get("decision_context"), dict)
+            else {}
+        )
+        decision_metrics = (
+            turn.get("decision_metrics")
+            if isinstance(turn.get("decision_metrics"), dict)
+            else {}
+        )
         foods = []
         for food in board.food:
             path = self.pathfinder.shortest_path(board, head, food)
@@ -194,7 +204,13 @@ class RealMatchAuditor:
             "chosen_direction": chosen,
             "valid_moves": valid_moves,
             "mode": turn.get("mode"),
-            "compute_level": turn.get("compute_level"),
+            "schema_version": turn.get("schema_version", 1),
+            "compute_level": turn.get("compute_level") or decision_context.get("compute_level"),
+            "decision_metrics": decision_metrics,
+            "recorded_target_food": decision_context.get("target_food"),
+            "recorded_food_race": decision_context.get("food_race"),
+            "recorded_enemy_prediction": decision_context.get("enemy_prediction"),
+            "decision_reason": decision_context.get("decision_reason"),
             "nearest_food_distance": nearest,
             "foods": foods,
             "analysis": analysis,
@@ -244,6 +260,11 @@ class RealMatchAuditor:
                     "chosen_direction": decision["chosen_direction"],
                     "mode": decision["mode"],
                     "compute_level": decision["compute_level"],
+                    "decision_metrics": decision["decision_metrics"],
+                    "recorded_target_food": decision["recorded_target_food"],
+                    "recorded_food_race": decision["recorded_food_race"],
+                    "recorded_enemy_prediction": decision["recorded_enemy_prediction"],
+                    "decision_reason": decision["decision_reason"],
                     "interesting_foods": interesting,
                 })
         return cases
