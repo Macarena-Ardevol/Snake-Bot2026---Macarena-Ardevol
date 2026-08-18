@@ -193,6 +193,32 @@ class TestLiveStateHub(unittest.TestCase):
                 self.assertIn(b"DERROTA", html)
                 self.assertIn(b"EMPATE", html)
                 self.assertIn(b"RENDER_INTERVAL_MS = 100", html)
+                self.assertIn(b'class="score-row own-score"', html)
+                self.assertIn(b'class="score-row rival-score"', html)
+                self.assertIn(b"MOVIMIENTOS", html)
+                self.assertIn(b"GANANDO", html)
+                self.assertIn(b"PERDIENDO", html)
+                self.assertIn(b"function standing(state)", html)
+                self.assertIn(
+                    b"state.side === 'B' ? (state.score_2 ?? 0) : (state.score_1 ?? 0)",
+                    html,
+                )
+                self.assertIn(
+                    b"state.side === 'B' ? (state.score_1 ?? 0) : (state.score_2 ?? 0)",
+                    html,
+                )
+                self.assertIn(b"function isSelfChallenge(state)", html)
+                self.assertIn(b"function sideClass(side)", html)
+                self.assertIn(b"side === 'B' ? 'side-b' : 'side-a'", html)
+                self.assertIn(b"sideClass(state.side)", html)
+                self.assertIn(b"sideClass(rivalSide(state))", html)
+                self.assertIn(b"MI BOT", html)
+                self.assertIn(b".side-dot.side-a { color: var(--a); background: var(--a); }", html)
+                self.assertIn(b".side-dot.side-b { color: var(--b); background: var(--b); }", html)
+                self.assertIn(b"A: cssColor('--a')", html)
+                self.assertIn(b"B: cssColor('--b')", html)
+                self.assertIn(b"detailIdentityRow('Mi bot'", html)
+                self.assertIn(b"detailIdentityRow('Rival'", html)
         finally:
             visualizer.stop()
 

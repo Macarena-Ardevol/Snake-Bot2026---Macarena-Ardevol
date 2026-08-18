@@ -39,7 +39,18 @@
     .card-head, .card-line { display: flex; justify-content: space-between; gap: 7px; align-items: center; min-width: 0; }
     .opponent { font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .game-id, .meta { color: var(--muted); font-size: 11px; }
-    .scoreline { font: 750 15px ui-monospace, monospace; margin: 6px 0; }
+    .standing { margin: 6px 0 5px; font-size: 12px; font-weight: 900; letter-spacing: .055em; }
+    .standing.leading { color: var(--a); } .standing.tied { color: var(--food); } .standing.trailing { color: var(--danger); }
+    .scores { display: grid; gap: 2px; margin-bottom: 5px; }
+    .score-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: baseline; font-size: 11px; }
+    .score-owner { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; color: var(--muted); font-weight: 750; }
+    .score-owner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .side-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
+    .side-dot.side-a { color: var(--a); background: var(--a); }
+    .side-dot.side-b { color: var(--b); background: var(--b); }
+    .score-value { font: 850 15px ui-monospace, monospace; color: var(--text); }
+    .moves { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin: 6px 0; padding: 5px 7px; border-radius: 7px; background: var(--surface-2); font-size: 11px; font-weight: 800; letter-spacing: .025em; }
+    .moves strong { font: 900 16px ui-monospace, monospace; color: var(--food); }
     .badge { border-radius: 999px; padding: 2px 6px; font-size: 9px; font-weight: 800; letter-spacing: .04em; background: var(--surface-2); white-space: nowrap; }
     .badge.normal { color: var(--a); } .badge.busy { color: var(--food); } .badge.critical { color: var(--danger); }
     .board { display: block; width: 100%; aspect-ratio: 1; margin: 7px 0; border-radius: 7px; background: #0b1711; image-rendering: pixelated; }
@@ -55,6 +66,7 @@
     .detail-list { display: grid; align-content: start; gap: 10px; }
     .detail-row { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
     .detail-row span:first-child { color: var(--muted); }
+    .detail-identity { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; text-align: right; }
     @media (max-width: 720px) { main { width: calc(100% - 14px); } header { align-items: flex-start; flex-direction: column; } .detail-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -88,7 +100,8 @@
     const empty = document.getElementById('empty');
     const dialog = document.getElementById('detailDialog');
     const directionLabels = { up: '↑ ARRIBA', down: '↓ ABAJO', left: '← IZQUIERDA', right: '→ DERECHA' };
-    const colors = { ' ': '#0b1711', A: '#64f58d', a: '#258d49', B: '#68b7ff', b: '#286492', '*': '#ffca55' };
+    const cssColor = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const colors = { ' ': '#0b1711', A: cssColor('--a'), a: cssColor('--a-body'), B: cssColor('--b'), b: cssColor('--b-body'), '*': cssColor('--food') };
     let statusFilter = 'all';
     let resultFilter = 'all';
     let detailGameId = null;
@@ -121,8 +134,20 @@
     }
 
     function opponent(state) { return state.side === 'A' ? state.player_2 : state.player_1; }
+    function ownPlayer(state) { return state.side === 'B' ? state.player_2 : state.player_1; }
+    function rivalSide(state) { return state.side === 'A' ? 'B' : 'A'; }
     function ownScore(state) { return state.side === 'B' ? (state.score_2 ?? 0) : (state.score_1 ?? 0); }
     function rivalScore(state) { return state.side === 'B' ? (state.score_1 ?? 0) : (state.score_2 ?? 0); }
+    function isSelfChallenge(state) { return Boolean(state.player_1 && state.player_1 === state.player_2); }
+    function ownLabel(state) { return isSelfChallenge(state) ? 'MI BOT' : `YO · ${ownPlayer(state) || 'Mi bot'}`; }
+    function rivalLabel(state) { return isSelfChallenge(state) ? 'MI BOT' : `RIVAL · ${opponent(state) || 'Desconocido'}`; }
+    function rivalHeading(state) { return isSelfChallenge(state) ? `Mi bot (${rivalSide(state)})` : (opponent(state) || 'Rival'); }
+    function sideClass(side) { return side === 'B' ? 'side-b' : 'side-a'; }
+    function standing(state) {
+      if (ownScore(state) > rivalScore(state)) return { label: 'GANANDO', className: 'leading' };
+      if (ownScore(state) < rivalScore(state)) return { label: 'PERDIENDO', className: 'trailing' };
+      return { label: 'EMPATE', className: 'tied' };
+    }
     function result(state) {
       if (state.status !== 'finished') return 'active';
       if (ownScore(state) > rivalScore(state)) return 'win';
@@ -159,13 +184,18 @@
       card.dataset.gameId = state.game_id;
       card.tabIndex = 0;
       const level = ['normal', 'busy', 'critical'].includes(state.compute_level) ? state.compute_level : 'normal';
+      const position = standing(state);
       card.innerHTML = `
-        <div class="card-head"><span class="opponent">vs ${escapeHtml(opponent(state) || 'Rival')}</span><span class="badge">BOT ${escapeHtml(state.side)}</span></div>
-        <div class="card-line game-id"><span>${escapeHtml(shortId(state.game_id))}</span><span class="result ${outcome}">${resultLabel(outcome)}</span></div>
-        <div class="card-line scoreline"><span>${escapeHtml(ownScore(state))} – ${escapeHtml(rivalScore(state))}</span><span class="badge ${level}">${level.toUpperCase()}</span></div>
-        <div class="card-line meta"><span>Moves ${escapeHtml(state.remaining_moves)}</span><span>${state.decision_ms == null ? '—' : escapeHtml(Number(state.decision_ms).toFixed(1) + ' ms')}</span></div>
+        <div class="card-head"><span class="opponent">vs ${escapeHtml(rivalHeading(state))}</span><span class="badge">BOT ${escapeHtml(state.side)}</span></div>
+        <div class="standing ${position.className}">${state.status === 'finished' ? `${resultLabel(outcome)} · ` : ''}${position.label}</div>
+        <div class="scores">
+          <div class="score-row own-score"><span class="score-owner"><i aria-hidden="true" class="side-dot ${sideClass(state.side)}"></i><span class="score-owner-text">${escapeHtml(ownLabel(state))} · ${escapeHtml(state.side)}</span></span><strong class="score-value">${escapeHtml(ownScore(state))}</strong></div>
+          <div class="score-row rival-score"><span class="score-owner"><i aria-hidden="true" class="side-dot ${sideClass(rivalSide(state))}"></i><span class="score-owner-text">${escapeHtml(rivalLabel(state))} · ${rivalSide(state)}</span></span><strong class="score-value">${escapeHtml(rivalScore(state))}</strong></div>
+        </div>
+        <div class="moves"><span>MOVIMIENTOS</span><strong>${escapeHtml(state.remaining_moves)}</strong></div>
         <canvas class="board" aria-label="Tablero ${escapeHtml(shortId(state.game_id))}"></canvas>
-        <div class="card-line"><span class="last">${escapeHtml(directionLabels[state.direction] || state.direction || 'SIN JUGADA')}</span><span class="meta">${escapeHtml(state.mode || 'balanced')}</span></div>`;
+        <div class="card-line"><span class="last">${escapeHtml(directionLabels[state.direction] || state.direction || 'SIN JUGADA')}</span><span class="meta">${escapeHtml(state.mode || 'balanced')}</span></div>
+        <div class="card-line game-id"><span>${escapeHtml(shortId(state.game_id))}</span><span class="meta"><span class="badge ${level}">${level.toUpperCase()}</span> ${state.decision_ms == null ? '—' : escapeHtml(Number(state.decision_ms).toFixed(1) + ' ms')}</span></div>`;
       const open = () => openDetail(state.game_id);
       card.onclick = open;
       card.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') open(); };
@@ -187,11 +217,14 @@
     }
 
     function detailRow(label, value) { return `<div class="detail-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`; }
+    function detailIdentityRow(label, name, side) { return `<div class="detail-row"><span>${escapeHtml(label)}</span><strong class="detail-identity"><i aria-hidden="true" class="side-dot ${sideClass(side)}"></i>${escapeHtml(name)} · ${escapeHtml(side)}</strong></div>`; }
     function renderDetail(state) {
       const outcome = result(state);
       document.getElementById('detailTitle').textContent = `${shortId(state.game_id)} · vs ${opponent(state) || 'Rival'}`;
       document.getElementById('detailInfo').innerHTML = [
         detailRow('Game ID', state.game_id), detailRow('Estado', resultLabel(outcome)),
+        detailIdentityRow('Mi bot', ownPlayer(state) || '—', state.side),
+        detailIdentityRow('Rival', opponent(state) || '—', rivalSide(state)),
         detailRow('Jugador A', `${state.player_1 || '—'} · ${state.score_1 ?? 0}`),
         detailRow('Jugador B', `${state.player_2 || '—'} · ${state.score_2 ?? 0}`),
         detailRow('Lado del bot', state.side), detailRow('Rival', opponent(state)),
