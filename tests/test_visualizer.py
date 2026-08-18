@@ -153,27 +153,66 @@ class TestLiveStateHub(unittest.TestCase):
             self.assertEqual((actual_standing, actual_result), (standing, result))
             self.assertEqual(rival, "rival")
 
-    def test_game_over_empty_side_preserves_b_identity_scores_and_board(self):
+    def test_real_bot_a_game_over_preserves_identity_and_result(self):
         hub = LiveStateHub()
         hub.publish({
-            "game_id": "real-game", "side": "B", "status": "playing",
-            "player_1": "santiagomartinez", "player_2": "macarenaardevol",
-            "score_1": 447, "score_2": 1733, "board": "last-board",
-            "direction": "left", "compute_level": "normal",
+            "game_id": "73452406", "side": "A", "status": "playing",
+            "player_1": "macarenaardevol", "player_2": "maximoadarvez",
+            "score_1": 1238, "score_2": 1139, "board": "last-a-board",
+            "direction": "left", "mode": "defensive", "compute_level": "normal",
         })
         hub.publish({
-            "game_id": "real-game", "side": "", "status": "finished",
-            "player_1": "santiagomartinez", "player_2": "macarenaardevol",
-            "score_1": 447, "score_2": 1734, "winner": "macarenaardevol",
+            "game_id": "73452406", "side": "A", "status": "finished",
+            "player_1": "macarenaardevol", "player_2": "maximoadarvez",
+            "score_1": 1239, "score_2": 1140, "winner": "macarenaardevol",
+        })
+        state = self.states(hub)[0]
+        self.assertEqual(
+            self.perspective(state),
+            ("macarenaardevol", "maximoadarvez", 1239, 1140, "GANANDO", "VICTORIA"),
+        )
+        self.assertEqual((state["board"], state["direction"], state["mode"]),
+                         ("last-a-board", "left", "defensive"))
+
+    def test_real_bot_b_rejects_valid_but_contradictory_final_side(self):
+        hub = LiveStateHub()
+        hub.publish({
+            "game_id": "bce5e99c", "side": "B", "status": "playing",
+            "player_1": "arielcohen", "player_2": "macarenaardevol",
+            "score_1": 1635, "score_2": 1139, "board": "last-b-board",
+            "direction": "down", "mode": "aggressive", "compute_level": "normal",
+        })
+        hub.publish({
+            "game_id": "bce5e99c", "side": "A", "status": "finished",
+            "player_1": "arielcohen", "player_2": "macarenaardevol",
+            "score_1": 1635, "score_2": 1140, "winner": "arielcohen",
         })
         state = self.states(hub)[0]
         self.assertEqual(state["side"], "B")
-        self.assertEqual(state["board"], "last-board")
-        self.assertEqual(state["direction"], "left")
+        self.assertEqual(state["board"], "last-b-board")
+        self.assertEqual(state["direction"], "down")
+        self.assertEqual(state["mode"], "aggressive")
+        self.assertEqual(state["compute_level"], "normal")
         self.assertEqual(
             self.perspective(state),
-            ("macarenaardevol", "santiagomartinez", 1734, 447, "GANANDO", "VICTORIA"),
+            ("macarenaardevol", "arielcohen", 1140, 1635, "PERDIENDO", "DERROTA"),
         )
+
+    def test_game_over_cannot_swap_established_players(self):
+        hub = LiveStateHub()
+        hub.publish({
+            "game_id": "stable-identity", "side": "B", "status": "playing",
+            "player_1": "rival", "player_2": "macarenaardevol",
+            "score_1": 10, "score_2": 20,
+        })
+        hub.publish({
+            "game_id": "stable-identity", "side": "A", "status": "finished",
+            "player_1": "macarenaardevol", "player_2": "rival",
+            "score_1": 10, "score_2": 20, "winner": "macarenaardevol",
+        })
+        state = self.states(hub)[0]
+        self.assertEqual((state["side"], state["player_1"], state["player_2"]),
+                         ("B", "rival", "macarenaardevol"))
 
     def test_self_challenge_and_multiple_games_keep_side_perspective(self):
         hub = LiveStateHub()
