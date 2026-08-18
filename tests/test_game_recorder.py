@@ -49,6 +49,15 @@ class TestGameRecorder(unittest.TestCase):
                     }
                 },
                 mode="balanced",
+                compute_level="busy",
+                decision_metrics={
+                    "decision_ms": 12.5,
+                    "receive_to_send_ms": 14.0,
+                    "pending_decisions": 4,
+                },
+                decision_context={
+                    "target_food": {"status": "known", "food": [0, 3]},
+                },
             )
 
             file_path = recorder.finish_game(
@@ -97,6 +106,10 @@ class TestGameRecorder(unittest.TestCase):
                 saved_data["bot_side"],
                 "A",
             )
+            self.assertEqual(saved_data["schema_version"], 2)
+            self.assertEqual(saved_data["turns"][0]["schema_version"], 2)
+            self.assertEqual(saved_data["turns"][0]["compute_level"], "busy")
+            self.assertEqual(saved_data["turns"][0]["decision_metrics"]["pending_decisions"], 4)
 
 
 if __name__ == "__main__":

@@ -193,6 +193,28 @@ class TestRealMatchAudit(unittest.TestCase):
             "alternative_move_higher_two_ply",
         )
 
+    def test_schema_v2_telemetry_is_exposed(self):
+        path = self.write_game()
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["turns"][0].update({
+            "schema_version": 2,
+            "compute_level": "critical",
+            "decision_metrics": {"pending_decisions": 70, "decision_ms": 4.2},
+            "decision_context": {
+                "target_food": {"status": "known", "food": [3, 4]},
+                "food_race": {"target_status": "known", "result": "winning"},
+                "enemy_prediction": {"direction": None, "confidence": None},
+                "decision_reason": "safe_food",
+            },
+        })
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+        decision = self.report()["decisions"][0]
+        self.assertEqual(decision["schema_version"], 2)
+        self.assertEqual(decision["compute_level"], "critical")
+        self.assertEqual(decision["decision_metrics"]["pending_decisions"], 70)
+        self.assertEqual(decision["recorded_target_food"]["food"], [3, 4])
+
 
 if __name__ == "__main__":
     unittest.main()

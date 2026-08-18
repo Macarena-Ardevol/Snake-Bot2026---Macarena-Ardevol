@@ -331,6 +331,7 @@ class BotClient:
 
         decision_start = time.perf_counter()
         load_snapshot = self.load_controller.decision_started()
+        decision_failed = False
 
         try:
             try:
@@ -348,6 +349,7 @@ class BotClient:
                     choose_move,
                 )
             except Exception as error:
+                decision_failed = True
                 # Una estrategia compleja nunca debe costarnos un timeout. Si el
                 # análisis falla, enviamos de inmediato el primer movimiento que
                 # el tablero actual considera legal.
@@ -391,6 +393,17 @@ class BotClient:
             - turn_start
         )
 
+        if decision_failed:
+            strategy.last_decision_context = {
+                "compute_level": load_snapshot.level,
+                "mode": getattr(strategy, "current_mode", None),
+                "chosen_direction": direction,
+                "decision_reason": "fallback",
+                "target_food": {"status": "unknown"},
+                "food_race": {"target_status": "unknown", "result": "unknown"},
+                "enemy_prediction": {"direction": None, "confidence": None},
+            }
+
         self.decision_metrics.append({
             "game_id": game_id,
             "compute_level": load_snapshot.level,
@@ -417,6 +430,7 @@ class BotClient:
             strategy,
             direction,
             decision_time,
+            send_time,
             load_snapshot.level,
             load_snapshot.pending_decisions,
         )
@@ -430,6 +444,7 @@ class BotClient:
         strategy: SnakeStrategy,
         direction: str,
         decision_time: float,
+        receive_to_send_time: float,
         compute_level: str,
         pending_decisions: int,
     ) -> None:
@@ -481,6 +496,13 @@ class BotClient:
             direction=direction,
             analysis=strategy.last_analysis,
             mode=getattr(strategy, "current_mode", None),
+            compute_level=compute_level,
+            decision_metrics={
+                "decision_ms": decision_time * 1000,
+                "receive_to_send_ms": receive_to_send_time * 1000,
+                "pending_decisions": pending_decisions,
+            },
+            decision_context=getattr(strategy, "last_decision_context", {}),
         )
 
         self.previous_boards[
