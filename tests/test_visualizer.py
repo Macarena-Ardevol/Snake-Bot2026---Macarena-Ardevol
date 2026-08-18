@@ -31,6 +31,23 @@ class TestLiveStateHub(unittest.TestCase):
             return len(visualizer.hub._subscribers)
 
     @staticmethod
+    def perspective(state):
+        side = state["side"]
+        if side == "A":
+            own_player, rival = state["player_1"], state["player_2"]
+            own_score, rival_score = state["score_1"], state["score_2"]
+        else:
+            own_player, rival = state["player_2"], state["player_1"]
+            own_score, rival_score = state["score_2"], state["score_1"]
+        if own_score > rival_score:
+            standing, result = "GANANDO", "VICTORIA"
+        elif own_score < rival_score:
+            standing, result = "PERDIENDO", "DERROTA"
+        else:
+            standing = result = "EMPATE"
+        return own_player, rival, own_score, rival_score, standing, result
+
+    @staticmethod
     def receive_until(client, expected, timeout=1.0):
         deadline = time.monotonic() + timeout
         received = b""
@@ -111,6 +128,68 @@ class TestLiveStateHub(unittest.TestCase):
         self.assertEqual(state["score_1"], 101)
         self.assertEqual(state["side"], "B")
         self.assertEqual(state["compute_level"], "busy")
+
+    def test_bot_as_a_and_b_uses_its_side_for_wins_and_losses(self):
+        cases = (
+            ("a-win", "A", 20, 10, "bot", 20, "GANANDO", "VICTORIA"),
+            ("b-win", "B", 10, 20, "bot", 20, "GANANDO", "VICTORIA"),
+            ("a-loss", "A", 10, 20, "bot", 10, "PERDIENDO", "DERROTA"),
+            ("b-loss", "B", 20, 10, "bot", 10, "PERDIENDO", "DERROTA"),
+            ("draw", "B", 15, 15, "bot", 15, "EMPATE", "EMPATE"),
+        )
+        hub = LiveStateHub()
+        for game_id, side, score_1, score_2, player, score, standing, result in cases:
+            hub.publish({
+                "game_id": game_id, "side": side,
+                "player_1": "bot" if side == "A" else "rival",
+                "player_2": "bot" if side == "B" else "rival",
+                "score_1": score_1, "score_2": score_2,
+                "status": "finished",
+            })
+        states = {state["game_id"]: state for state in self.states(hub)}
+        for game_id, _, _, _, player, score, standing, result in cases:
+            own, rival, own_score, _, actual_standing, actual_result = self.perspective(states[game_id])
+            self.assertEqual((own, own_score), (player, score))
+            self.assertEqual((actual_standing, actual_result), (standing, result))
+            self.assertEqual(rival, "rival")
+
+    def test_game_over_empty_side_preserves_b_identity_scores_and_board(self):
+        hub = LiveStateHub()
+        hub.publish({
+            "game_id": "real-game", "side": "B", "status": "playing",
+            "player_1": "santiagomartinez", "player_2": "macarenaardevol",
+            "score_1": 447, "score_2": 1733, "board": "last-board",
+            "direction": "left", "compute_level": "normal",
+        })
+        hub.publish({
+            "game_id": "real-game", "side": "", "status": "finished",
+            "player_1": "santiagomartinez", "player_2": "macarenaardevol",
+            "score_1": 447, "score_2": 1734, "winner": "macarenaardevol",
+        })
+        state = self.states(hub)[0]
+        self.assertEqual(state["side"], "B")
+        self.assertEqual(state["board"], "last-board")
+        self.assertEqual(state["direction"], "left")
+        self.assertEqual(
+            self.perspective(state),
+            ("macarenaardevol", "santiagomartinez", 1734, 447, "GANANDO", "VICTORIA"),
+        )
+
+    def test_self_challenge_and_multiple_games_keep_side_perspective(self):
+        hub = LiveStateHub()
+        hub.publish({
+            "game_id": "self-a", "side": "A", "player_1": "macarenaardevol",
+            "player_2": "macarenaardevol", "score_1": 30, "score_2": 20,
+        })
+        hub.publish({
+            "game_id": "self-b", "side": "B", "player_1": "macarenaardevol",
+            "player_2": "macarenaardevol", "score_1": 30, "score_2": 20,
+        })
+        states = {state["game_id"]: state for state in self.states(hub)}
+        self.assertEqual(self.perspective(states["self-a"])[2:5], (30, 20, "GANANDO"))
+        self.assertEqual(self.perspective(states["self-b"])[2:5], (20, 30, "PERDIENDO"))
+        self.assertEqual(states["self-a"]["side"], "A")
+        self.assertEqual(states["self-b"]["side"], "B")
 
     def test_same_rival_and_self_challenge_remain_distinct_by_game_id(self):
         hub = LiveStateHub()
@@ -193,12 +272,17 @@ class TestLiveStateHub(unittest.TestCase):
                 self.assertIn(b"DERROTA", html)
                 self.assertIn(b"EMPATE", html)
                 self.assertIn(b"RENDER_INTERVAL_MS = 100", html)
+                self.assertIn(b"--status-size: clamp(24px, 3vw, 38px)", html)
+                self.assertIn(b"--score-size: clamp(17px, 1.05vw, 20px)", html)
+                self.assertIn(b"--moves-size: clamp(18px, 1.15vw, 22px)", html)
+                self.assertIn(b"width: min(100%, var(--board-max))", html)
                 self.assertIn(b'class="score-row own-score"', html)
                 self.assertIn(b'class="score-row rival-score"', html)
                 self.assertIn(b"MOVIMIENTOS", html)
                 self.assertIn(b"GANANDO", html)
                 self.assertIn(b"PERDIENDO", html)
                 self.assertIn(b"function standing(state)", html)
+                self.assertIn(b"state.status === 'finished' ? resultLabel(outcome) : position.label", html)
                 self.assertIn(
                     b"state.side === 'B' ? (state.score_2 ?? 0) : (state.score_1 ?? 0)",
                     html,
