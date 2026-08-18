@@ -24,7 +24,17 @@ class LiveStateHub:
             if game_id:
                 key = str(game_id)
                 previous = self._games.get(key, {})
-                merged = {**previous, **state, "game_id": key}
+                incoming = state.copy()
+                incoming_side = incoming.get("side")
+                if incoming_side not in ("A", "B"):
+                    bot_side = incoming.get("bot_side")
+                    if bot_side in ("A", "B"):
+                        incoming["side"] = bot_side
+                    else:
+                        # game_over puede informar side="". No debe borrar el
+                        # lado válido aprendido en los turnos de esta partida.
+                        incoming.pop("side", None)
+                merged = {**previous, **incoming, "game_id": key}
                 self._games[key] = merged
                 self._track_finished(key, merged)
             subscribers = tuple(self._subscribers)

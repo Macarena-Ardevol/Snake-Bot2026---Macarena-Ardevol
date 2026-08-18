@@ -25,36 +25,41 @@
     .filters { display: flex; gap: 6px; flex-wrap: wrap; }
     button, select { border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); padding: 7px 10px; font: inherit; font-size: 12px; cursor: pointer; }
     button:hover, button.active { border-color: var(--a); }
-    .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min)), 1fr)); gap: 12px; align-items: start; }
-    .dashboard.density-one { --card-min: min(720px, 100%); max-width: 980px; margin: auto; }
-    .dashboard.density-low { --card-min: 360px; }
-    .dashboard.density-medium { --card-min: 245px; }
-    .dashboard.density-high { --card-min: 180px; gap: 8px; }
-    .dashboard.density-ultra { --card-min: 138px; gap: 5px; }
+    .dashboard {
+      --status-size: clamp(15px, 1.25vw, 22px); --score-size: clamp(18px, 1.45vw, 26px);
+      --moves-size: clamp(19px, 1.55vw, 28px); --identity-size: clamp(12px, .85vw, 15px);
+      --direction-size: clamp(12px, .9vw, 15px); --board-max: 100%;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-min)), 1fr)); gap: 12px; align-items: start;
+    }
+    .dashboard.density-one { --card-min: min(720px, 100%); --status-size: clamp(24px, 3vw, 38px); --score-size: clamp(27px, 3.3vw, 42px); --moves-size: clamp(29px, 3.6vw, 46px); --identity-size: clamp(16px, 1.55vw, 21px); --direction-size: clamp(16px, 1.5vw, 21px); --board-max: min(43vh, 420px); max-width: 980px; margin: auto; }
+    .dashboard.density-low { --card-min: 360px; --status-size: clamp(20px, 2vw, 29px); --score-size: clamp(24px, 2.35vw, 34px); --moves-size: clamp(25px, 2.55vw, 36px); --identity-size: clamp(14px, 1.2vw, 17px); --direction-size: clamp(14px, 1.2vw, 17px); --board-max: 360px; }
+    .dashboard.density-medium { --card-min: 245px; --status-size: clamp(17px, 1.45vw, 23px); --score-size: clamp(21px, 1.75vw, 28px); --moves-size: clamp(22px, 1.9vw, 30px); --identity-size: clamp(12px, .95vw, 15px); --direction-size: clamp(13px, 1vw, 16px); }
+    .dashboard.density-high { --card-min: 180px; --status-size: clamp(14px, 1.05vw, 18px); --score-size: clamp(18px, 1.25vw, 22px); --moves-size: clamp(19px, 1.35vw, 23px); --identity-size: clamp(11px, .75vw, 13px); --direction-size: clamp(12px, .8vw, 14px); gap: 8px; }
+    .dashboard.density-ultra { --card-min: 150px; --status-size: clamp(13px, .9vw, 16px); --score-size: clamp(17px, 1.05vw, 20px); --moves-size: clamp(18px, 1.15vw, 22px); --identity-size: clamp(10px, .68vw, 12px); --direction-size: clamp(11px, .72vw, 13px); gap: 5px; }
     .game-card { min-width: 0; border: 1px solid var(--line); border-radius: 13px; padding: 10px; background: color-mix(in srgb, var(--surface) 96%, transparent); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 220px; }
     .game-card:hover { border-color: var(--muted); transform: translateY(-1px); }
-    .game-card.finished { opacity: .76; }
+    .game-card.finished { opacity: .88; }
     .game-card.win { border-color: color-mix(in srgb, var(--a) 60%, var(--line)); }
     .game-card.loss { border-color: color-mix(in srgb, var(--danger) 60%, var(--line)); }
     .card-head, .card-line { display: flex; justify-content: space-between; gap: 7px; align-items: center; min-width: 0; }
     .opponent { font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .game-id, .meta { color: var(--muted); font-size: 11px; }
-    .standing { margin: 6px 0 5px; font-size: 12px; font-weight: 900; letter-spacing: .055em; }
+    .standing { margin: 7px 0 6px; font-size: var(--status-size); line-height: 1.05; font-weight: 950; letter-spacing: .055em; text-shadow: 0 0 14px color-mix(in srgb, currentColor 28%, transparent); }
     .standing.leading { color: var(--a); } .standing.tied { color: var(--food); } .standing.trailing { color: var(--danger); }
     .scores { display: grid; gap: 2px; margin-bottom: 5px; }
-    .score-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: baseline; font-size: 11px; }
-    .score-owner { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; color: var(--muted); font-weight: 750; }
+    .score-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: var(--identity-size); }
+    .score-owner { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; color: var(--text); font-weight: 800; }
     .score-owner-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .side-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
     .side-dot.side-a { color: var(--a); background: var(--a); }
     .side-dot.side-b { color: var(--b); background: var(--b); }
-    .score-value { font: 850 15px ui-monospace, monospace; color: var(--text); }
-    .moves { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin: 6px 0; padding: 5px 7px; border-radius: 7px; background: var(--surface-2); font-size: 11px; font-weight: 800; letter-spacing: .025em; }
-    .moves strong { font: 900 16px ui-monospace, monospace; color: var(--food); }
+    .score-value { font: 900 var(--score-size)/1 ui-monospace, monospace; color: var(--text); }
+    .moves { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin: 7px 0; padding: 7px 9px; border-radius: 8px; background: var(--surface-2); font-size: var(--identity-size); font-weight: 850; letter-spacing: .035em; }
+    .moves strong { font: 950 var(--moves-size)/1 ui-monospace, monospace; color: var(--food); }
     .badge { border-radius: 999px; padding: 2px 6px; font-size: 9px; font-weight: 800; letter-spacing: .04em; background: var(--surface-2); white-space: nowrap; }
     .badge.normal { color: var(--a); } .badge.busy { color: var(--food); } .badge.critical { color: var(--danger); }
-    .board { display: block; width: 100%; aspect-ratio: 1; margin: 7px 0; border-radius: 7px; background: #0b1711; image-rendering: pixelated; }
-    .last { font-size: 11px; text-transform: uppercase; font-weight: 700; }
+    .board { display: block; width: min(100%, var(--board-max)); aspect-ratio: 1; margin: 8px auto; border-radius: 7px; background: #0b1711; image-rendering: pixelated; }
+    .last { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--direction-size); text-transform: uppercase; font-weight: 850; }
     .result { font-weight: 800; } .result.win { color: var(--a); } .result.loss { color: var(--danger); } .result.draw { color: var(--food); }
     .empty { min-height: 55vh; display: grid; place-items: center; text-align: center; color: var(--muted); }
     .hidden { display: none !important; }
@@ -187,7 +192,7 @@
       const position = standing(state);
       card.innerHTML = `
         <div class="card-head"><span class="opponent">vs ${escapeHtml(rivalHeading(state))}</span><span class="badge">BOT ${escapeHtml(state.side)}</span></div>
-        <div class="standing ${position.className}">${state.status === 'finished' ? `${resultLabel(outcome)} · ` : ''}${position.label}</div>
+        <div class="standing ${position.className}">${state.status === 'finished' ? resultLabel(outcome) : position.label}</div>
         <div class="scores">
           <div class="score-row own-score"><span class="score-owner"><i aria-hidden="true" class="side-dot ${sideClass(state.side)}"></i><span class="score-owner-text">${escapeHtml(ownLabel(state))} · ${escapeHtml(state.side)}</span></span><strong class="score-value">${escapeHtml(ownScore(state))}</strong></div>
           <div class="score-row rival-score"><span class="score-owner"><i aria-hidden="true" class="side-dot ${sideClass(rivalSide(state))}"></i><span class="score-owner-text">${escapeHtml(rivalLabel(state))} · ${rivalSide(state)}</span></span><strong class="score-value">${escapeHtml(rivalScore(state))}</strong></div>
