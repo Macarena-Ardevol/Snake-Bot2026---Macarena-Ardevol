@@ -1,0 +1,12 @@
+[run]
+source = .
+relative_files = true
+omit =
+    tests/*
+    .venv/*
+    venv/*
+
+[report]
+omit =
+    tests/*
+
