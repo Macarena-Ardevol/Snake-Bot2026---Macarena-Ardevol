@@ -128,6 +128,70 @@ class TestOpponentObserver(unittest.TestCase):
 
         self.assertTrue(result)
 
+    def test_food_observations_are_false_without_food(self):
+        previous = GameBoard(
+            """|       |
+| A     |
+|       |
+|       |
+|     B |
+|       |
+|       |"""
+        )
+        current = GameBoard(
+            """|       |
+| A     |
+|       |
+|    B  |
+|       |
+|       |
+|       |"""
+        )
+        self.assertFalse(self.observer.moved_toward_food(previous, current, "A"))
+        self.assertFalse(self.observer.contested_food(previous, current, "A"))
+
+    def test_detects_contested_food_when_enemy_approaches_reachable_food(self):
+        previous = GameBoard(
+            """|       |
+| A     |
+|   *   |
+|     B |
+|       |
+|       |
+|       |"""
+        )
+        current = GameBoard(
+            """|       |
+| A     |
+|   *B  |
+|       |
+|       |
+|       |
+|       |"""
+        )
+        self.assertTrue(self.observer.contested_food(previous, current, "A"))
+
+    def test_food_is_not_contested_when_enemy_moves_away(self):
+        previous = GameBoard(
+            """|       |
+| A     |
+|   *   |
+|    B  |
+|       |
+|       |
+|       |"""
+        )
+        current = GameBoard(
+            """|       |
+| A     |
+|   *   |
+|     B |
+|       |
+|       |
+|       |"""
+        )
+        self.assertFalse(self.observer.contested_food(previous, current, "A"))
+
 
 if __name__ == "__main__":
     unittest.main()

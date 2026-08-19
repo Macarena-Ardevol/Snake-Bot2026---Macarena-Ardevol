@@ -19,3 +19,6 @@ data/games/*.json
 data/opponents.json
 data/learning/
 data/selfplay/
+
+# Auditorías locales de partidas
+auditoria_*.json
